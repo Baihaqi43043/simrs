@@ -189,17 +189,13 @@ class JadwalDokterController extends Controller
      * Show the form for editing the specified resource.
      */
     public function edit(JadwalDokter $jadwalDokter)
-    {
-        $dokters = Dokter::where('is_active', true)->orderBy('nama_dokter')->get();
-        $polis = Poli::where('is_active', true)->orderBy('nama_poli')->get();
+{
+    $dokters = Dokter::where('is_active', true)->orderBy('nama_dokter')->get();
+    $polis = Poli::where('is_active', true)->orderBy('nama_poli')->get();
 
-        Log::info('Edit Jadwal Dokter Access:', [
-            'jadwal_id' => $jadwalDokter->id,
-            'jadwal_data' => $jadwalDokter->toArray()
-        ]);
-
-        return view('jadwal-dokters.edit', compact('jadwalDokter', 'dokters', 'polis'));
-    }
+    // Kirim sebagai 'dokter' bukan 'jadwalDokter'
+    return view('jadwal-dokters.edit', compact('dokters', 'polis'), ['dokter' => $jadwalDokter]);
+}
 
     /**
      * Update the specified resource in storage.

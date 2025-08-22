@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use App\Pasien;
+use App\Kunjungan;
 use Carbon\Carbon;
 
 class PasienController extends Controller
@@ -294,4 +295,13 @@ class PasienController extends Controller
 
         return $prefix . str_pad($newNumber, 4, '0', STR_PAD_LEFT);
     }
+
+    public function checkHistory($id)
+{
+    $hasHistory = Kunjungan::where('pasien_id', $id)->exists();
+
+    return response()->json([
+        'is_new_patient' => !$hasHistory
+    ]);
+}
 }

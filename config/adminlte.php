@@ -255,18 +255,7 @@ return [
             'icon' => 'fas fa-fw fa-users text-info',
         ],
         [
-            'text' => 'Pendaftaran Pasien',
-            'route' => 'pasiens.create',
-            'icon' => 'fas fa-fw fa-user-plus text-success',
-        ],
-        [
-            'text' => 'Pencarian Pasien',
-            'url' => '#',
-            'icon' => 'fas fa-fw fa-search text-primary',
-        ],
-
-        [
-            'text' => 'Riwayat Kunjungan',
+            'text' => 'Kunjungan Pasien',
             'route' => 'kunjungans.index',
             'icon' => 'fas fa-fw fa-clipboard-list text-secondary',
         ],

@@ -365,29 +365,43 @@ class KunjunganController extends Controller
             ->with('success', 'Status kunjungan berhasil diperbarui');
     }
 
+
     /**
      * Show today's kunjungans
      */
-    public function today(Request $request)
-    {
-        $query = Kunjungan::with(['pasien', 'dokter', 'poli'])
-            ->whereDate('tanggal_kunjungan', today());
+    // Di KunjunganController@today
+public function today(Request $request)
+{
+    $query = Kunjungan::whereDate('created_at', today())
+                      ->with(['pasien', 'poli', 'dokter']);
 
-        // Filter by status if provided
-        if ($request->has('status') && $request->status !== '') {
-            $query->where('status', $request->status);
-        }
-
-        // Filter by poli if provided
-        if ($request->has('poli_id') && $request->poli_id) {
-            $query->where('poli_id', $request->poli_id);
-        }
-
-        $kunjungans = $query->orderBy('no_antrian')->paginate(20);
-        $polis = Poli::where('is_active', 1)->orderBy('nama_poli')->get();
-
-        return view('kunjungans.today', compact('kunjungans', 'polis'));
+    // Apply filters
+    if ($request->poli) {
+        $query->where('poli_id', $request->poli);
     }
+    if ($request->dokter) {
+        $query->where('dokter_id', $request->dokter);
+    }
+    if ($request->status) {
+        $query->where('status', $request->status);
+    }
+
+    $kunjungans = $query->paginate(20);
+
+    // Statistics
+    $totalKunjungan = Kunjungan::whereDate('created_at', today())->count();
+    $menunggu = Kunjungan::whereDate('created_at', today())->where('status', 'menunggu')->count();
+    $selesai = Kunjungan::whereDate('created_at', today())->where('status', 'selesai')->count();
+    $batal = Kunjungan::whereDate('created_at', today())->where('status', 'batal')->count();
+
+    $polis = Poli::all();
+    $dokters = Dokter::all();
+    // dd($polis, $dokters);
+
+    return view('kunjungans.today', compact(
+        'kunjungans', 'totalKunjungan', 'menunggu', 'selesai', 'batal', 'polis', 'dokters'
+    ));
+}
 
     /**
      * Show antrian information
@@ -453,33 +467,67 @@ class KunjunganController extends Controller
     /**
      * Search pasien for kunjungan
      */
-    public function searchPasien(Request $request)
-    {
-        $query = Pasien::query();
+    // public function searchPasien(Request $request)
+    // {
+    //     $query = Pasien::query();
 
-        if ($request->has('q')) {
-            $search = $request->q;
-            $query->where(function ($q) use ($search) {
-                $q->where('nama', 'like', "%{$search}%")
-                  ->orWhere('no_rm', 'like', "%{$search}%")
-                  ->orWhere('nik', 'like', "%{$search}%");
-            });
-        }
+    //     if ($request->has('q')) {
+    //         $search = $request->q;
+    //         $query->where(function ($q) use ($search) {
+    //             $q->where('nama', 'like', "%{$search}%")
+    //               ->orWhere('no_rm', 'like', "%{$search}%")
+    //               ->orWhere('nik', 'like', "%{$search}%");
+    //         });
+    //     }
 
-        $pasiens = $query->limit(10)->get();
+    //     $pasiens = $query->limit(10)->get();
 
-        $results = $pasiens->map(function ($pasien) {
-            return [
-                'id' => $pasien->id,
-                'text' => $pasien->no_rm . ' - ' . $pasien->nama . ' (' . $pasien->nik . ')',
-                'no_rm' => $pasien->no_rm,
-                'nama' => $pasien->nama,
-                'nik' => $pasien->nik
-            ];
+    //     $results = $pasiens->map(function ($pasien) {
+    //         return [
+    //             'id' => $pasien->id,
+    //             'text' => $pasien->no_rm . ' - ' . $pasien->nama . ' (' . $pasien->nik . ')',
+    //             'no_rm' => $pasien->no_rm,
+    //             'nama' => $pasien->nama,
+    //             'nik' => $pasien->nik
+    //         ];
+    //     });
+
+    //     return response()->json($results);
+    // }
+
+    // Di KunjunganController.php
+public function searchPasien(Request $request)
+{
+    $term = $request->get('q', ''); // Default empty string
+
+    $query = Pasien::query();
+
+    if (!empty($term)) {
+        $query->where(function($q) use ($term) {
+            $q->where('nama', 'LIKE', "%{$term}%")
+              ->orWhere('no_rm', 'LIKE', "%{$term}%")
+              ->orWhere('nik', 'LIKE', "%{$term}%");
         });
-
-        return response()->json($results);
     }
+
+    $pasiens = $query->orderBy('created_at', 'desc')
+                   ->limit(10)
+                   ->get()
+                   ->map(function($pasien) {
+                       return [
+                           'id' => $pasien->id,
+                           'no_rm' => $pasien->no_rm,
+                           'nama' => $pasien->nama,
+                           'nik' => $pasien->nik,
+                           'jenis_kelamin' => $pasien->jenis_kelamin,
+                           'tanggal_lahir' => $pasien->tanggal_lahir,
+                           'alamat' => $pasien->alamat,
+                           'telepon' => $pasien->telepon
+                       ];
+                   });
+
+    return response()->json($pasiens);
+}
 
     /**
      * Get antrian info for kunjungan
@@ -543,12 +591,35 @@ class KunjunganController extends Controller
     /**
      * Generate nomor antrian
      */
-    private function generateNoAntrian($poliId, $tanggal)
-    {
-        $lastAntrian = Kunjungan::where('poli_id', $poliId)
-            ->whereDate('tanggal_kunjungan', $tanggal)
-            ->max('no_antrian');
+    public function generateNomorAntrian(Request $request)
+{
+    // dd($request->all());
+    $poliId = $request->get('poli_id');
+    $tanggal = $request->get('tanggal');
 
-        return ($lastAntrian ?? 0) + 1;
+    if (!$poliId || !$tanggal) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Poli ID dan tanggal harus diisi'
+        ]);
     }
+
+    // Hitung nomor antrian berdasarkan jumlah kunjungan hari itu di poli tersebut
+    $lastAntrian = Kunjungan::where('poli_id', $poliId)
+                           ->whereDate('tanggal_kunjungan', $tanggal)
+                           ->count();
+
+    $nomorAntrian = str_pad($lastAntrian + 1, 3, '0', STR_PAD_LEFT);
+
+    $poli = Poli::find($poliId);
+
+    return response()->json([
+        'success' => true,
+        'data' => [
+            'no_antrian' => $nomorAntrian,
+            'poli_nama' => $poli->nama ?? $poli->nama_poli ?? '',
+            'tanggal' => $tanggal
+        ]
+    ]);
+}
 }
