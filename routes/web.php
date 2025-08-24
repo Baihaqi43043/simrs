@@ -156,6 +156,7 @@ Route::middleware('token.auth')->group(function () {
         Route::get('/{kunjungan}/diagnosa/{diagnosa}/edit', 'Web\DiagnosaController@edit')->name('diagnosa.edit');
         Route::put('/{kunjungan}/diagnosa/{diagnosa}', 'Web\DiagnosaController@update')->name('diagnosa.update');
         Route::delete('/{kunjungan}/diagnosa/{diagnosa}', 'Web\DiagnosaController@destroy')->name('diagnosa.destroy');
+        Route::get('/{kunjungan}/print', 'Web\KunjunganController@print')->name('print');
 
         // === PELAYANAN GABUNGAN ===
     Route::get('/{kunjungan}/pelayanan', 'Web\KunjunganController@pelayanan')->name('pelayanan');

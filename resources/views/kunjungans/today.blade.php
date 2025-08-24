@@ -213,15 +213,9 @@
                                                     </button>
                                                     <div class="dropdown-menu">
                                                         <a class="dropdown-item" href="{{ route('kunjungans.pelayanan', $kunjungan->id) }}">
-                                                            <i class="fas fa-clipboard-list"></i> Input Lengkap
+                                                            <i class="fas fa-clipboard-list"></i> Input Tindakan & Diagnosa
                                                         </a>
                                                         <div class="dropdown-divider"></div>
-                                                        <a class="dropdown-item" href="{{ route('kunjungans.tindakan.index', $kunjungan->id) }}">
-                                                            <i class="fas fa-tools"></i> Tindakan
-                                                        </a>
-                                                        <a class="dropdown-item" href="{{ route('kunjungans.diagnosa.index', $kunjungan->id) }}">
-                                                            <i class="fas fa-diagnoses"></i> Diagnosa
-                                                        </a>
                                                     </div>
                                                 </div>
                                                 @endif
@@ -250,6 +244,11 @@
                                                     <i class="fas fa-times"></i>
                                                 </button>
                                                 @endif
+                                                <!-- Tombol Print Bukti Pendaftaran -->
+                                            <a href="{{ route('kunjungans.print', $kunjungan->id) }}"
+                                            class="btn btn-secondary" title="Print Bukti Pendaftaran" target="_blank">
+                                                <i class="fas fa-print"></i>
+                                            </a>
                                             </div>
                                         </td>
                                     </tr>

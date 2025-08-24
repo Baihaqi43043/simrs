@@ -1029,4 +1029,25 @@ public function storePelayanan(Request $request, $kunjunganId)
                         ->withInput();
     }
 }
+
+public function print($kunjungan)
+    {
+        $kunjungan = Kunjungan::with([
+            'pasien',
+            'dokter',
+            'poli'
+        ])->findOrFail($kunjungan);
+
+        $data = [
+            'kunjungan' => $kunjungan,
+            'tanggal_print' => Carbon::now()->format('d/m/Y H:i:s'),
+            'hospital_name' => 'RS UMUM LANGSA',
+            'hospital_address' => 'Jl. Kesehatan No. 123, Langsa, Aceh',
+            'hospital_phone' => '0641-12345678',
+        ];
+
+        // dd($data);
+
+        return view('kunjungans.print', $data);
+    }
 }
