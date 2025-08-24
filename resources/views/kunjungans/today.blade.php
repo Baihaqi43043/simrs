@@ -121,7 +121,7 @@
                                 <select class="form-control" id="filter_status" name="filter_status">
                                     <option value="">Semua Status</option>
                                     <option value="menunggu">Menunggu</option>
-                                    <option value="sedang_diperiksa">Sedang Diperiksa</option>
+                                    <option value="sedang_dilayani">Sedang Dilayani</option>
                                     <option value="selesai">Selesai</option>
                                     <option value="batal">Batal</option>
                                 </select>
@@ -174,8 +174,8 @@
                                                 @case('menunggu')
                                                     <span class="badge badge-warning">Menunggu</span>
                                                     @break
-                                                @case('sedang_diperiksa')
-                                                    <span class="badge badge-info">Sedang Diperiksa</span>
+                                                @case('sedang_dilayani')
+                                                    <span class="badge badge-info">Sedang Dilayani</span>
                                                     @break
                                                 @case('selesai')
                                                     <span class="badge badge-success">Selesai</span>
@@ -187,29 +187,55 @@
                                                     <span class="badge badge-secondary">-</span>
                                             @endswitch
                                         </td>
+                                        <!-- Update bagian buttons di view kunjungan today untuk menambahkan aksi pelayanan -->
                                         <td>
                                             <div class="btn-group btn-group-sm">
+                                                <!-- Tombol Detail -->
                                                 <a href="{{ route('kunjungans.show', $kunjungan->id) }}"
-                                                   class="btn btn-info" title="Detail">
+                                                class="btn btn-info" title="Detail">
                                                     <i class="fas fa-eye"></i>
                                                 </a>
 
+                                                <!-- Tombol Edit (jika belum selesai) -->
                                                 @if($kunjungan->status !== 'selesai')
                                                 <a href="{{ route('kunjungans.edit', $kunjungan->id) }}"
-                                                   class="btn btn-warning" title="Edit">
+                                                class="btn btn-warning" title="Edit">
                                                     <i class="fas fa-edit"></i>
                                                 </a>
                                                 @endif
 
+                                                <!-- TOMBOL PELAYANAN - BARU -->
+                                                @if(in_array($kunjungan->status, ['menunggu', 'sedang_dilayani']))
+                                                <div class="btn-group">
+                                                    <button type="button" class="btn btn-secondary btn-sm dropdown-toggle"
+                                                            data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                                        <i class="fas fa-medical-file"></i> Pelayanan
+                                                    </button>
+                                                    <div class="dropdown-menu">
+                                                        <a class="dropdown-item" href="{{ route('kunjungans.pelayanan', $kunjungan->id) }}">
+                                                            <i class="fas fa-clipboard-list"></i> Input Lengkap
+                                                        </a>
+                                                        <div class="dropdown-divider"></div>
+                                                        <a class="dropdown-item" href="{{ route('kunjungans.tindakan.index', $kunjungan->id) }}">
+                                                            <i class="fas fa-tools"></i> Tindakan
+                                                        </a>
+                                                        <a class="dropdown-item" href="{{ route('kunjungans.diagnosa.index', $kunjungan->id) }}">
+                                                            <i class="fas fa-diagnoses"></i> Diagnosa
+                                                        </a>
+                                                    </div>
+                                                </div>
+                                                @endif
+
+                                                <!-- Tombol Status (seperti sebelumnya) -->
                                                 @if($kunjungan->status === 'menunggu')
                                                 <button type="button" class="btn btn-success"
-                                                        onclick="updateStatus({{ $kunjungan->id }}, 'sedang_diperiksa')"
+                                                        onclick="updateStatus({{ $kunjungan->id }}, 'sedang_dilayani')"
                                                         title="Mulai Periksa">
                                                     <i class="fas fa-play"></i>
                                                 </button>
                                                 @endif
 
-                                                @if($kunjungan->status === 'sedang_diperiksa')
+                                                @if($kunjungan->status === 'sedang_dilayani')
                                                 <button type="button" class="btn btn-primary"
                                                         onclick="updateStatus({{ $kunjungan->id }}, 'selesai')"
                                                         title="Selesai">
@@ -217,7 +243,7 @@
                                                 </button>
                                                 @endif
 
-                                                @if(in_array($kunjungan->status, ['menunggu', 'sedang_diperiksa']))
+                                                @if(in_array($kunjungan->status, ['menunggu', 'sedang_dilayani']))
                                                 <button type="button" class="btn btn-danger"
                                                         onclick="updateStatus({{ $kunjungan->id }}, 'batal')"
                                                         title="Batalkan">
@@ -253,7 +279,6 @@
 </section>
 @endsection
 
-@section('scripts')
 <script>
 $(document).ready(function() {
     // Initialize Select2
@@ -307,14 +332,16 @@ function clearFilter() {
     window.location.href = url.toString();
 }
 
+// Update JavaScript function di view untuk match dengan enum tabel
+
 function updateStatus(kunjunganId, newStatus) {
     let confirmMessage = '';
     let statusText = '';
 
     switch(newStatus) {
-        case 'sedang_diperiksa':
+        case 'sedang_dilayani': // Sesuaikan dengan enum tabel
             confirmMessage = 'Mulai pemeriksaan untuk pasien ini?';
-            statusText = 'Sedang Diperiksa';
+            statusText = 'Sedang Dilayani';
             break;
         case 'selesai':
             confirmMessage = 'Selesaikan pemeriksaan untuk pasien ini?';
@@ -397,7 +424,6 @@ $(document).ready(function() {
     }
 });
 </script>
-@endsection
 
 @section('styles')
 <style>

@@ -1,5 +1,6 @@
 <?php
 
+// app/Tindakan.php (buat file baru)
 namespace App;
 
 use Illuminate\Database\Eloquent\Model;
@@ -16,12 +17,7 @@ class Tindakan extends Model
         'keterangan',
         'dikerjakan_oleh',
         'tanggal_tindakan',
-        'status_tindakan',
-    ];
-
-    protected $casts = [
-        'jumlah' => 'integer',
-        'tarif_satuan' => 'decimal:2',
+        'status_tindakan'
     ];
 
     protected $dates = [
@@ -30,31 +26,20 @@ class Tindakan extends Model
         'updated_at'
     ];
 
+    protected $casts = [
+        'jumlah' => 'integer',
+        'tarif_satuan' => 'decimal:2'
+    ];
+
     // Relationships
     public function kunjungan()
     {
         return $this->belongsTo(Kunjungan::class);
     }
 
-    public function dikerjakan()
+    public function dokter()
     {
         return $this->belongsTo(Dokter::class, 'dikerjakan_oleh');
-    }
-
-    // Scopes
-    public function scopeByKunjungan($query, $kunjunganId)
-    {
-        return $query->where('kunjungan_id', $kunjunganId);
-    }
-
-    public function scopeByStatus($query, $status)
-    {
-        return $query->where('status_tindakan', $status);
-    }
-
-    public function scopeByKategori($query, $kategori)
-    {
-        return $query->where('kategori_tindakan', $kategori);
     }
 
     // Accessors
@@ -74,19 +59,45 @@ class Tindakan extends Model
 
         return $statuses[$this->status_tindakan] ?? $this->status_tindakan;
     }
-
-    // Laravel 7 Events (boot method)
-    public static function boot()
-    {
-        parent::boot();
-
-        static::saved(function ($tindakan) {
-            $tindakan->kunjungan->updateTotalBiaya();
-        });
-
-        static::deleted(function ($tindakan) {
-            $tindakan->kunjungan->updateTotalBiaya();
-        });
-    }
 }
 
+// app/Diagnosa.php (buat file baru)
+namespace App;
+
+use Illuminate\Database\Eloquent\Model;
+
+class Diagnosa extends Model
+{
+    protected $fillable = [
+        'kunjungan_id',
+        'jenis_diagnosa',
+        'kode_icd',
+        'nama_diagnosa',
+        'deskripsi',
+        'didiagnosa_oleh',
+        'tanggal_diagnosa'
+    ];
+
+    protected $dates = [
+        'tanggal_diagnosa',
+        'created_at',
+        'updated_at'
+    ];
+
+    // Relationships
+    public function kunjungan()
+    {
+        return $this->belongsTo(Kunjungan::class);
+    }
+
+    public function dokter()
+    {
+        return $this->belongsTo(Dokter::class, 'didiagnosa_oleh');
+    }
+
+    // Accessors
+    public function getJenisTextAttribute()
+    {
+        return $this->jenis_diagnosa === 'utama' ? 'Diagnosa Utama' : 'Diagnosa Sekunder';
+    }
+}

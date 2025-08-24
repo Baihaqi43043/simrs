@@ -34,40 +34,40 @@ class Kunjungan extends Model
         'updated_at'
     ];
 
-    // Relationships
+    // Relationships - PERBAIKAN: Gunakan namespace penuh
     public function pasien()
     {
-        return $this->belongsTo(Pasien::class);
+        return $this->belongsTo(\App\Pasien::class, 'pasien_id', 'id');
     }
 
     public function dokter()
     {
-        return $this->belongsTo(Dokter::class);
+        return $this->belongsTo(\App\Dokter::class, 'dokter_id', 'id');
     }
 
     public function poli()
     {
-        return $this->belongsTo(Poli::class);
+        return $this->belongsTo(\App\Poli::class, 'poli_id', 'id');
     }
 
     public function jadwalDokter()
     {
-        return $this->belongsTo(JadwalDokter::class);
+        return $this->belongsTo(\App\JadwalDokter::class, 'jadwal_dokter_id', 'id');
     }
 
     public function createdBy()
     {
-        return $this->belongsTo(User::class, 'created_by');
+        return $this->belongsTo(\App\User::class, 'created_by', 'id');
     }
 
     public function tindakans()
     {
-        return $this->hasMany(Tindakan::class);
+        return $this->hasMany(\App\Tindakan::class, 'kunjungan_id', 'id');
     }
 
     public function diagnosas()
     {
-        return $this->hasMany(Diagnosa::class);
+        return $this->hasMany(\App\Diagnosa::class, 'kunjungan_id', 'id');
     }
 
     // Scopes
@@ -138,4 +138,28 @@ class Kunjungan extends Model
     {
         return $this->status === 'menunggu';
     }
+
+    // Helper method untuk cek apakah bisa menambah diagnosa
+public function canAddDiagnosa()
+{
+    return in_array($this->status, ['menunggu', 'sedang_dilayani']);
+}
+
+// Method untuk cek apakah sudah ada diagnosa utama
+public function hasUtamaDiagnosa()
+{
+    return $this->diagnosas()->where('jenis_diagnosa', 'utama')->exists();
+}
+
+// Get diagnosa utama
+public function getDiagnosaUtama()
+{
+    return $this->diagnosas()->where('jenis_diagnosa', 'utama')->first();
+}
+
+// Get diagnosa sekunder
+public function getDiagnosaSekunder()
+{
+    return $this->diagnosas()->where('jenis_diagnosa', 'sekunder')->get();
+}
 }

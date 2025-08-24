@@ -1,5 +1,6 @@
 <?php
 
+// app/Diagnosa.php
 namespace App;
 
 use Illuminate\Database\Eloquent\Model;
@@ -13,7 +14,7 @@ class Diagnosa extends Model
         'nama_diagnosa',
         'deskripsi',
         'didiagnosa_oleh',
-        'tanggal_diagnosa',
+        'tanggal_diagnosa'
     ];
 
     protected $dates = [
@@ -25,30 +26,38 @@ class Diagnosa extends Model
     // Relationships
     public function kunjungan()
     {
-        return $this->belongsTo(Kunjungan::class);
+        return $this->belongsTo(\App\Kunjungan::class, 'kunjungan_id', 'id');
     }
 
+    public function dokter()
+    {
+        return $this->belongsTo(\App\Dokter::class, 'didiagnosa_oleh', 'id');
+    }
+
+    // Alias untuk relationship dokter (sesuai dengan controller API yang sudah ada)
     public function didiagnosa()
     {
-        return $this->belongsTo(Dokter::class, 'didiagnosa_oleh');
+        return $this->belongsTo(\App\Dokter::class, 'didiagnosa_oleh', 'id');
+    }
+
+    // Accessors
+    public function getJenisTextAttribute()
+    {
+        return $this->jenis_diagnosa === 'utama' ? 'Diagnosa Utama' : 'Diagnosa Sekunder';
+    }
+
+    // Helper methods (jika dibutuhkan untuk business logic)
+    public function canBeUpdated()
+    {
+        return in_array($this->kunjungan->status ?? 'menunggu', ['menunggu', 'sedang_dilayani']);
+    }
+
+    public function canBeDeleted()
+    {
+        return in_array($this->kunjungan->status ?? 'menunggu', ['menunggu', 'sedang_dilayani']);
     }
 
     // Scopes
-    public function scopeByKunjungan($query, $kunjunganId)
-    {
-        return $query->where('kunjungan_id', $kunjunganId);
-    }
-
-    public function scopeByJenis($query, $jenis)
-    {
-        return $query->where('jenis_diagnosa', $jenis);
-    }
-
-    public function scopeByIcd($query, $kodeIcd)
-    {
-        return $query->where('kode_icd', 'like', "%{$kodeIcd}%");
-    }
-
     public function scopeUtama($query)
     {
         return $query->where('jenis_diagnosa', 'utama');
@@ -59,15 +68,18 @@ class Diagnosa extends Model
         return $query->where('jenis_diagnosa', 'sekunder');
     }
 
-    // Accessors
-    public function getJenisTextAttribute()
+    public function scopeByKunjungan($query, $kunjunganId)
     {
-        return $this->jenis_diagnosa === 'utama' ? 'Diagnosa Utama' : 'Diagnosa Sekunder';
+        return $query->where('kunjungan_id', $kunjunganId);
     }
 
-    public function getKodeNamaAttribute()
+    public function scopeByIcdCode($query, $icdCode)
     {
-        return $this->kode_icd . ' - ' . $this->nama_diagnosa;
+        return $query->where('kode_icd', 'like', "%{$icdCode}%");
+    }
+
+    public function scopeByDokter($query, $dokterId)
+    {
+        return $query->where('didiagnosa_oleh', $dokterId);
     }
 }
-

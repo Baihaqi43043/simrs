@@ -97,6 +97,7 @@ class KunjunganController extends Controller
      */
     public function store(Request $request)
     {
+        dd('test');
         $validator = Validator::make($request->all(), [
             'pasien_id' => 'required|exists:pasiens,id',
             'dokter_id' => 'required|exists:dokters,id',

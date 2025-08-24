@@ -12,6 +12,8 @@ use App\Pasien;
 use App\Dokter;
 use App\Poli;
 use App\JadwalDokter;
+use App\Tindakan;
+use App\Diagnosa;
 use Carbon\Carbon;
 
 class KunjunganController extends Controller
@@ -100,107 +102,182 @@ class KunjunganController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request)
-    {
-        $validator = Validator::make($request->all(), [
-            'pasien_id' => 'required|exists:pasiens,id',
-            'dokter_id' => 'required|exists:dokters,id',
-            'poli_id' => 'required|exists:polis,id',
-            'jadwal_dokter_id' => 'nullable|exists:jadwal_dokters,id',
-            'tanggal_kunjungan' => 'required|date|after_or_equal:today',
-            'jam_kunjungan' => 'nullable|date_format:H:i',
-            'jenis_kunjungan' => 'required|in:baru,lama',
-            'cara_bayar' => 'required|in:umum,bpjs,asuransi',
-            'keluhan_utama' => 'nullable|string|max:1000'
-        ]);
+public function store(Request $request)
+{
+    // Ambil user dari session (karena tidak pakai Laravel auth)
+    $sessionUser = session('user');
 
-        if ($validator->fails()) {
-            return redirect()->back()
-                ->withErrors($validator)
-                ->withInput();
+    if (!$sessionUser) {
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'User session not found. Please login again.'
+            ], 401);
         }
 
-        DB::beginTransaction();
-
-        try {
-            $tanggal = Carbon::parse($request->tanggal_kunjungan);
-
-            // Validate jadwal dokter if provided
-            if ($request->jadwal_dokter_id) {
-                $jadwal = JadwalDokter::find($request->jadwal_dokter_id);
-
-                // Check if date matches schedule day
-                $dayName = strtolower($tanggal->format('l'));
-                $dayMapping = [
-                    'monday' => 'senin', 'tuesday' => 'selasa', 'wednesday' => 'rabu',
-                    'thursday' => 'kamis', 'friday' => 'jumat', 'saturday' => 'sabtu', 'sunday' => 'minggu'
-                ];
-
-                if ($jadwal->hari !== $dayMapping[$dayName]) {
-                    DB::rollBack();
-                    return redirect()->back()
-                        ->with('error', 'Tanggal yang dipilih tidak sesuai dengan jadwal dokter')
-                        ->withInput();
-                }
-
-                // Check quota availability
-                if (!$jadwal->isKuotaAvailable($tanggal)) {
-                    DB::rollBack();
-                    return redirect()->back()
-                        ->with('error', 'Kuota dokter sudah penuh untuk tanggal ini')
-                        ->withInput();
-                }
-            }
-
-            // Generate no_kunjungan
-            $noKunjungan = $this->generateNoKunjungan($tanggal);
-
-            // Generate no_antrian
-            $noAntrian = $this->generateNoAntrian($request->poli_id, $tanggal);
-
-            // Determine jenis_kunjungan automatically if not specified correctly
-            $pasien = Pasien::find($request->pasien_id);
-            $isNewPatient = $pasien->isPassienBaru();
-
-            if ($request->jenis_kunjungan === 'baru' && !$isNewPatient) {
-                $jenisKunjungan = 'lama';
-            } else {
-                $jenisKunjungan = $request->jenis_kunjungan;
-            }
-
-            // Create kunjungan
-            $kunjungan = Kunjungan::create([
-                'no_kunjungan' => $noKunjungan,
-                'pasien_id' => $request->pasien_id,
-                'dokter_id' => $request->dokter_id,
-                'poli_id' => $request->poli_id,
-                'jadwal_dokter_id' => $request->jadwal_dokter_id,
-                'tanggal_kunjungan' => $tanggal,
-                'jam_kunjungan' => $request->jam_kunjungan,
-                'no_antrian' => $noAntrian,
-                'jenis_kunjungan' => $jenisKunjungan,
-                'cara_bayar' => $request->cara_bayar,
-                'keluhan_utama' => $request->keluhan_utama,
-                'status' => 'menunggu',
-                'total_biaya' => 0,
-                'created_by' => auth()->user()->id
-            ]);
-
-            DB::commit();
-
-            return redirect()->route('kunjungans.show', $kunjungan->id)
-                ->with('success', 'Kunjungan berhasil didaftarkan dengan nomor antrian: ' . $noAntrian);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('Create Kunjungan Error: ' . $e->getMessage());
-
-            return redirect()->back()
-                ->with('error', 'Gagal mendaftarkan kunjungan: ' . $e->getMessage())
-                ->withInput();
-        }
+        return redirect()->route('login')->with('error', 'Session expired. Please login again.');
     }
 
+    // Gunakan user ID dari session
+    $userId = $sessionUser['id'] ?? null;
+
+    if (!$userId) {
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'User ID not found in session'
+            ], 401);
+        }
+
+        return redirect()->route('login')->with('error', 'Invalid session. Please login again.');
+    }
+
+    $validator = Validator::make($request->all(), [
+        'pasien_id' => 'required|exists:pasiens,id',
+        'dokter_id' => 'required|exists:dokters,id',
+        'poli_id' => 'required|exists:polis,id',
+        'jadwal_dokter_id' => 'nullable|exists:jadwal_dokters,id',
+        'tanggal_kunjungan' => 'required|date|after_or_equal:today',
+        'jam_kunjungan' => 'nullable|date_format:H:i',
+        'jenis_kunjungan' => 'required|in:baru,lama',
+        'cara_bayar' => 'required|in:umum,bpjs,asuransi',
+        'keluhan_utama' => 'nullable|string|max:1000'
+    ]);
+
+    if ($validator->fails()) {
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation error',
+                'errors' => $validator->errors()
+            ], 400);
+        }
+
+        return redirect()->back()
+                ->withErrors($validator)
+                ->withInput();
+    }
+
+    DB::beginTransaction();
+
+    try {
+        $tanggal = Carbon::parse($request->tanggal_kunjungan);
+
+        // Validate jadwal dokter if provided
+        if ($request->jadwal_dokter_id) {
+            $jadwal = JadwalDokter::find($request->jadwal_dokter_id);
+
+            // Check if date matches schedule day
+            $dayName = strtolower($tanggal->format('l'));
+            $dayMapping = [
+                'monday' => 'senin', 'tuesday' => 'selasa', 'wednesday' => 'rabu',
+                'thursday' => 'kamis', 'friday' => 'jumat', 'saturday' => 'sabtu', 'sunday' => 'minggu'
+            ];
+
+            if ($jadwal->hari !== $dayMapping[$dayName]) {
+                DB::rollBack();
+
+                if ($request->expectsJson()) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Selected date does not match doctor schedule day'
+                    ], 400);
+                }
+
+                return redirect()->back()
+                        ->with('error', 'Tanggal yang dipilih tidak sesuai dengan jadwal dokter')
+                        ->withInput();
+            }
+
+            // Check quota availability
+            if (!$jadwal->isKuotaAvailable($tanggal)) {
+                DB::rollBack();
+
+                if ($request->expectsJson()) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Doctor quota is full for this date'
+                    ], 400);
+                }
+
+                return redirect()->back()
+                        ->with('error', 'Kuota dokter untuk tanggal tersebut sudah penuh')
+                        ->withInput();
+            }
+        }
+
+        // Generate no_kunjungan
+        $noKunjungan = $this->generateNoKunjungan($tanggal);
+
+        // Generate no_antrian
+        $noAntrian = $this->generateNoAntrian($request->poli_id, $tanggal);
+
+        // Determine jenis_kunjungan automatically if not specified correctly
+        $pasien = Pasien::find($request->pasien_id);
+        $isNewPatient = $pasien->isPassienBaru();
+
+        if ($request->jenis_kunjungan === 'baru' && !$isNewPatient) {
+            // Patient already has visit history, should be 'lama'
+            $jenisKunjungan = 'lama';
+        } else {
+            $jenisKunjungan = $request->jenis_kunjungan;
+        }
+
+        // Create kunjungan
+        $kunjungan = Kunjungan::create([
+            'no_kunjungan' => $noKunjungan,
+            'pasien_id' => $request->pasien_id,
+            'dokter_id' => $request->dokter_id,
+            'poli_id' => $request->poli_id,
+            'jadwal_dokter_id' => $request->jadwal_dokter_id,
+            'tanggal_kunjungan' => $tanggal,
+            'jam_kunjungan' => $request->jam_kunjungan,
+            'no_antrian' => $noAntrian,
+            'jenis_kunjungan' => $jenisKunjungan,
+            'cara_bayar' => $request->cara_bayar,
+            'keluhan_utama' => $request->keluhan_utama,
+            'status' => 'menunggu',
+            'total_biaya' => 0,
+            'created_by' => $userId // Gunakan dari session
+        ]);
+
+        $kunjungan->load(['pasien', 'dokter', 'poli', 'jadwalDokter', 'createdBy']);
+
+        DB::commit();
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Kunjungan created successfully',
+                'data' => $kunjungan
+            ], 201);
+        }
+
+        return redirect()->route('kunjungans.index')
+                ->with('success', 'Kunjungan berhasil didaftarkan dengan No. Antrian: ' . $noAntrian);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+
+        // Log error untuk debugging
+        \Log::error('Kunjungan creation failed: ' . $e->getMessage(), [
+            'request_data' => $request->all(),
+            'session_user' => $sessionUser,
+            'user_id' => $userId
+        ]);
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to create kunjungan: ' . $e->getMessage()
+            ], 500);
+        }
+
+        return redirect()->back()
+                ->with('error', 'Gagal mendaftarkan kunjungan: ' . $e->getMessage())
+                ->withInput();
+    }
+}
     /**
      * Display the specified resource.
      */
@@ -330,47 +407,47 @@ class KunjunganController extends Controller
     /**
      * Update kunjungan status
      */
-    public function updateStatus(Request $request, $id)
-    {
-        $kunjungan = Kunjungan::findOrFail($id);
+    // public function updateStatus(Request $request, $id)
+    // {
+    //     $kunjungan = Kunjungan::findOrFail($id);
 
-        $validator = Validator::make($request->all(), [
-            'status' => 'required|in:menunggu,sedang_dilayani,selesai,batal'
-        ]);
+    //     $validator = Validator::make($request->all(), [
+    //         'status' => 'required|in:menunggu,sedang_dilayani,selesai,batal'
+    //     ]);
 
-        if ($validator->fails()) {
-            return redirect()->back()
-                ->with('error', 'Status tidak valid');
-        }
+    //     if ($validator->fails()) {
+    //         return redirect()->back()
+    //             ->with('error', 'Status tidak valid');
+    //     }
 
-        // Validate status transition
-        $currentStatus = $kunjungan->status;
-        $newStatus = $request->status;
+    //     // Validate status transition
+    //     $currentStatus = $kunjungan->status;
+    //     $newStatus = $request->status;
 
-        $validTransitions = [
-            'menunggu' => ['sedang_dilayani', 'batal'],
-            'sedang_dilayani' => ['selesai', 'menunggu'],
-            'selesai' => [],
-            'batal' => []
-        ];
+    //     $validTransitions = [
+    //         'menunggu' => ['sedang_dilayani', 'batal'],
+    //         'sedang_dilayani' => ['selesai', 'menunggu'],
+    //         'selesai' => [],
+    //         'batal' => []
+    //     ];
 
-        if (!in_array($newStatus, $validTransitions[$currentStatus])) {
-            return redirect()->back()
-                ->with('error', "Tidak dapat mengubah status dari {$currentStatus} ke {$newStatus}");
-        }
+    //     if (!in_array($newStatus, $validTransitions[$currentStatus])) {
+    //         return redirect()->back()
+    //             ->with('error', "Tidak dapat mengubah status dari {$currentStatus} ke {$newStatus}");
+    //     }
 
-        $kunjungan->update(['status' => $newStatus]);
+    //     $kunjungan->update(['status' => $newStatus]);
 
-        return redirect()->back()
-            ->with('success', 'Status kunjungan berhasil diperbarui');
-    }
+    //     return redirect()->back()
+    //         ->with('success', 'Status kunjungan berhasil diperbarui');
+    // }
 
 
     /**
      * Show today's kunjungans
      */
     // Di KunjunganController@today
-public function today(Request $request)
+    public function today(Request $request)
 {
     $query = Kunjungan::whereDate('created_at', today())
                       ->with(['pasien', 'poli', 'dokter']);
@@ -386,7 +463,22 @@ public function today(Request $request)
         $query->where('status', $request->status);
     }
 
-    $kunjungans = $query->paginate(20);
+    $kunjungans = $query->orderBy('created_at', 'desc')->paginate(20);
+
+    // Transform untuk menambahkan virtual attribute 'nama' agar view bisa pakai ->nama
+    $kunjungans->getCollection()->transform(function ($kunjungan) {
+        // Tambahkan virtual attribute nama untuk dokter
+        if ($kunjungan->dokter) {
+            $kunjungan->dokter->nama = $kunjungan->dokter->nama_dokter;
+        }
+
+        // Tambahkan virtual attribute nama untuk poli
+        if ($kunjungan->poli) {
+            $kunjungan->poli->nama = $kunjungan->poli->nama_poli;
+        }
+
+        return $kunjungan;
+    });
 
     // Statistics
     $totalKunjungan = Kunjungan::whereDate('created_at', today())->count();
@@ -394,12 +486,29 @@ public function today(Request $request)
     $selesai = Kunjungan::whereDate('created_at', today())->where('status', 'selesai')->count();
     $batal = Kunjungan::whereDate('created_at', today())->where('status', 'batal')->count();
 
-    $polis = Poli::all();
-    $dokters = Dokter::all();
-    // dd($polis, $dokters);
+    // Get filter data
+    $polis = Poli::where('is_active', true)->get();
+    $dokters = Dokter::where('is_active', true)->get();
+
+    // Transform untuk filter dropdown
+    $polis->transform(function($poli) {
+        $poli->nama = $poli->nama_poli; // Virtual attribute untuk consistency di dropdown
+        return $poli;
+    });
+
+    $dokters->transform(function($dokter) {
+        $dokter->nama = $dokter->nama_dokter; // Virtual attribute untuk consistency di dropdown
+        return $dokter;
+    });
 
     return view('kunjungans.today', compact(
-        'kunjungans', 'totalKunjungan', 'menunggu', 'selesai', 'batal', 'polis', 'dokters'
+        'kunjungans',
+        'totalKunjungan',
+        'menunggu',
+        'selesai',
+        'batal',
+        'polis',
+        'dokters'
     ));
 }
 
@@ -670,4 +779,254 @@ private function generateNoAntrian($poliId, $tanggal)
 
         return ($lastAntrian ?? 0) + 1;
     }
+
+    // Tambahkan method ini di KunjunganController.php
+
+public function updateStatus(Request $request, $id)
+{
+    // Cek session user
+    $sessionUser = session('user');
+    if (!$sessionUser) {
+        return response()->json([
+            'success' => false,
+            'message' => 'User not authenticated'
+        ], 401);
+    }
+
+    // Validasi input - sesuai dengan enum di tabel
+    $request->validate([
+        'status' => 'required|in:menunggu,sedang_dilayani,selesai,batal'
+    ]);
+
+    // Cari kunjungan
+    $kunjungan = Kunjungan::find($id);
+
+    if (!$kunjungan) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Kunjungan tidak ditemukan'
+        ], 404);
+    }
+
+    try {
+        // Update status
+        $kunjungan->update([
+            'status' => $request->status
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Status berhasil diubah',
+            'data' => [
+                'id' => $kunjungan->id,
+                'status' => $kunjungan->status
+            ]
+        ]);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Gagal mengubah status: ' . $e->getMessage()
+        ], 500);
+    }
+}
+
+public function pelayanan($kunjunganId)
+{
+    $sessionUser = session('user');
+    if (!$sessionUser) {
+        return redirect()->route('login')->with('error', 'Please login first');
+    }
+
+    $kunjungan = Kunjungan::with(['pasien', 'dokter', 'poli'])->findOrFail($kunjunganId);
+
+    // Cek apakah kunjungan bisa dilayani
+    if (!in_array($kunjungan->status, ['menunggu', 'sedang_dilayani'])) {
+        return redirect()->route('kunjungans.show', $kunjunganId)
+                        ->with('error', 'Kunjungan tidak dapat dilayani. Status: ' . $kunjungan->status);
+    }
+
+    // Get existing tindakan dan diagnosa
+    $tindakans = Tindakan::where('kunjungan_id', $kunjunganId)
+                         ->with(['dokter'])
+                         ->orderBy('created_at', 'desc')
+                         ->get();
+
+    $diagnosas = Diagnosa::where('kunjungan_id', $kunjunganId)
+                         ->with(['dokter'])
+                         ->orderBy('jenis_diagnosa', 'asc')
+                         ->orderBy('created_at', 'desc')
+                         ->get();
+
+    $dokters = Dokter::where('is_active', true)->get();
+
+    return view('kunjungans.pelayanan', compact('kunjungan', 'tindakans', 'diagnosas', 'dokters'));
+}
+
+/**
+ * Store pelayanan (tindakan & diagnosa sekaligus)
+ */
+public function storePelayanan(Request $request, $kunjunganId)
+{
+    $sessionUser = session('user');
+    if (!$sessionUser) {
+        return response()->json([
+            'success' => false,
+            'message' => 'User not authenticated'
+        ], 401);
+    }
+
+    $userId = $sessionUser['id'] ?? null;
+    $kunjungan = Kunjungan::findOrFail($kunjunganId);
+
+    // Validasi input
+    $validator = Validator::make($request->all(), [
+        // Tindakan validation
+        'tindakans' => 'nullable|array',
+        'tindakans.*.kode_tindakan' => 'required|string|max:20',
+        'tindakans.*.nama_tindakan' => 'required|string|max:255',
+        'tindakans.*.kategori_tindakan' => 'nullable|string|max:100',
+        'tindakans.*.jumlah' => 'required|integer|min:1',
+        'tindakans.*.tarif_satuan' => 'required|numeric|min:0',
+        'tindakans.*.keterangan' => 'nullable|string',
+        'tindakans.*.dikerjakan_oleh' => 'nullable|exists:dokters,id',
+        'tindakans.*.status_tindakan' => 'required|in:rencana,sedang_dikerjakan,selesai,batal',
+
+        // Diagnosa validation
+        'diagnosas' => 'nullable|array',
+        'diagnosas.*.jenis_diagnosa' => 'required|in:utama,sekunder',
+        'diagnosas.*.kode_icd' => 'required|string|max:10',
+        'diagnosas.*.nama_diagnosa' => 'required|string|max:500',
+        'diagnosas.*.deskripsi' => 'nullable|string',
+        'diagnosas.*.didiagnosa_oleh' => 'nullable|exists:dokters,id',
+
+        // Catatan kunjungan
+        'catatan_kunjungan' => 'nullable|string',
+        'status_kunjungan' => 'required|in:menunggu,sedang_dilayani,selesai'
+    ]);
+
+    if ($validator->fails()) {
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => false,
+                'errors' => $validator->errors()
+            ], 400);
+        }
+        return redirect()->back()->withErrors($validator)->withInput();
+    }
+
+    DB::beginTransaction();
+    try {
+        // Process Tindakan
+        if ($request->has('tindakans') && is_array($request->tindakans)) {
+            foreach ($request->tindakans as $tindakanData) {
+                Tindakan::create([
+                    'kunjungan_id' => $kunjunganId,
+                    'kode_tindakan' => $tindakanData['kode_tindakan'],
+                    'nama_tindakan' => $tindakanData['nama_tindakan'],
+                    'kategori_tindakan' => $tindakanData['kategori_tindakan'] ?? null,
+                    'jumlah' => $tindakanData['jumlah'],
+                    'tarif_satuan' => $tindakanData['tarif_satuan'],
+                    'keterangan' => $tindakanData['keterangan'] ?? null,
+                    'dikerjakan_oleh' => $tindakanData['dikerjakan_oleh'] ?? null,
+                    'tanggal_tindakan' => now(),
+                    'status_tindakan' => $tindakanData['status_tindakan']
+                ]);
+            }
+        }
+
+        // Process Diagnosa
+        if ($request->has('diagnosas') && is_array($request->diagnosas)) {
+            // Validasi: Hanya boleh ada 1 diagnosa utama
+            $utamaCount = 0;
+            foreach ($request->diagnosas as $diagnosaData) {
+                if ($diagnosaData['jenis_diagnosa'] === 'utama') {
+                    $utamaCount++;
+                }
+            }
+
+            $existingUtama = Diagnosa::where('kunjungan_id', $kunjunganId)
+                                    ->where('jenis_diagnosa', 'utama')
+                                    ->exists();
+
+            if (($utamaCount > 1) || ($existingUtama && $utamaCount > 0)) {
+                DB::rollBack();
+                if ($request->expectsJson()) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Hanya boleh ada satu diagnosa utama'
+                    ], 400);
+                }
+                return redirect()->back()->with('error', 'Hanya boleh ada satu diagnosa utama')->withInput();
+            }
+
+            foreach ($request->diagnosas as $diagnosaData) {
+                Diagnosa::create([
+                    'kunjungan_id' => $kunjunganId,
+                    'jenis_diagnosa' => $diagnosaData['jenis_diagnosa'],
+                    'kode_icd' => $diagnosaData['kode_icd'],
+                    'nama_diagnosa' => $diagnosaData['nama_diagnosa'],
+                    'deskripsi' => $diagnosaData['deskripsi'] ?? null,
+                    'didiagnosa_oleh' => $diagnosaData['didiagnosa_oleh'] ?? null,
+                    'tanggal_diagnosa' => now()
+                ]);
+            }
+        }
+
+        // Update kunjungan
+        $updateData = [];
+        if ($request->catatan_kunjungan) {
+            $updateData['catatan'] = $request->catatan_kunjungan;
+        }
+        if ($request->status_kunjungan) {
+            $updateData['status'] = $request->status_kunjungan;
+        }
+
+        // Update total biaya
+        $totalTindakan = Tindakan::where('kunjungan_id', $kunjunganId)->sum('total_biaya');
+        $updateData['total_biaya'] = $totalTindakan;
+
+        if (!empty($updateData)) {
+            $kunjungan->update($updateData);
+        }
+
+        DB::commit();
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Pelayanan berhasil disimpan',
+                'data' => [
+                    'kunjungan' => $kunjungan->fresh(),
+                    'total_tindakan' => Tindakan::where('kunjungan_id', $kunjunganId)->count(),
+                    'total_diagnosa' => Diagnosa::where('kunjungan_id', $kunjunganId)->count()
+                ]
+            ]);
+        }
+
+        return redirect()->route('kunjungans.show', $kunjunganId)
+                        ->with('success', 'Pelayanan berhasil disimpan');
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+
+        \Log::error('Failed to store pelayanan', [
+            'kunjungan_id' => $kunjunganId,
+            'user_id' => $userId,
+            'error' => $e->getMessage(),
+            'request_data' => $request->all()
+        ]);
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal menyimpan pelayanan: ' . $e->getMessage()
+            ], 500);
+        }
+
+        return redirect()->back()
+                        ->with('error', 'Gagal menyimpan pelayanan: ' . $e->getMessage())
+                        ->withInput();
+    }
+}
 }
