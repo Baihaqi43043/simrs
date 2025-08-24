@@ -74,7 +74,8 @@ Route::middleware('token.auth')->group(function () {
         Route::put('/{dokter}', 'Web\DokterController@update')->name('update');
         Route::delete('/{dokter}', 'Web\DokterController@destroy')->name('destroy');
         Route::get('/{dokter}/jadwal-dokters', 'Web\DokterController@jadwalDokters')->name('jadwal-dokters');
-        Route::get('/{dokter}/jadwal', 'Web\DokterController@getJadwal')->name('jadwal'); // DIPINDAH KE SINI
+        // FIXED: Route untuk API jadwal dokter
+        Route::get('/{dokter}/jadwal', 'Web\DokterController@getJadwal')->name('jadwal');
     });
 
     // Export route di luar prefix
@@ -129,7 +130,7 @@ Route::middleware('token.auth')->group(function () {
         Route::get('/antrian', 'Web\KunjunganController@antrian')->name('antrian');
         Route::get('/create', 'Web\KunjunganController@create')->name('create');
         Route::get('/search-pasien', 'Web\KunjunganController@searchPasien')->name('search-pasien');
-        Route::get('/generate-nomor-antrian', 'Web\KunjunganController@generateNomorAntrian')->name('generate-nomor-antrian'); // DIPINDAH KE ATAS
+        Route::get('/generate-nomor-antrian', 'Web\KunjunganController@generateNomorAntrian')->name('generate-nomor-antrian');
         Route::post('/', 'Web\KunjunganController@store')->name('store');
         Route::post('/bulk-action', 'Web\KunjunganController@bulkAction')->name('bulk-action');
 
@@ -140,11 +141,16 @@ Route::middleware('token.auth')->group(function () {
         Route::delete('/{kunjungan}', 'Web\KunjunganController@destroy')->name('destroy');
     });
 
-    // Route khusus untuk check history pasien (di luar prefix kunjungans)
-    Route::get('/pasiens/{pasien}/check-history', 'Web\PasienController@checkHistory')->name('pasiens.check-history');
+    // ----------------------------------------
+    // API ROUTES (FIXED)
+    // ----------------------------------------
+    Route::prefix('api')->name('api.')->group(function () {
+        // API untuk mendapatkan jadwal dokter
+        Route::get('/dokters/{dokter}/jadwal', 'Web\DokterController@getJadwal')->name('dokters.jadwal');
+    });
 
     // ----------------------------------------
-    // AJAX ENDPOINTS
+    // AJAX ENDPOINTS (CLEANED UP)
     // ----------------------------------------
     Route::prefix('ajax')->name('ajax.')->group(function () {
         Route::get('/polis/select2', 'Web\PoliController@select2')->name('polis.select2');

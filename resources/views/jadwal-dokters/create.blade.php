@@ -3,18 +3,18 @@
 @endsection
 @extends('adminlte::page')
 
-@section('title', 'Tambah Dokter')
+@section('title', 'Tambah Jadwal Dokter')
 
 @section('content_header')
     <div class="row">
         <div class="col-sm-6">
-            <h1>Tambah Dokter Baru</h1>
+            <h1>Tambah Jadwal Dokter Baru</h1>
         </div>
         <div class="col-sm-6">
             <ol class="breadcrumb float-sm-right">
                 <li class="breadcrumb-item"><a href="{{ route('dashboard') }}">Dashboard</a></li>
-                <li class="breadcrumb-item"><a href="{{ route('dokters.index') }}">Daftar Dokter</a></li>
-                <li class="breadcrumb-item active">Tambah Dokter</li>
+                <li class="breadcrumb-item"><a href="{{ route('jadwal-dokters.index') }}">Jadwal Dokter</a></li>
+                <li class="breadcrumb-item active">Tambah Jadwal</li>
             </ol>
         </div>
     </div>
@@ -47,47 +47,52 @@
             <div class="card card-primary">
                 <div class="card-header">
                     <h3 class="card-title">
-                        <i class="fas fa-user-md"></i> Form Tambah Dokter
+                        <i class="fas fa-calendar-plus"></i> Form Tambah Jadwal Dokter
                     </h3>
                 </div>
 
-                <form action="{{ route('dokters.store') }}" method="POST" id="dokterForm">
+                <form action="{{ route('jadwal-dokters.store') }}" method="POST" id="jadwalForm">
                     @csrf
                     <div class="card-body">
                         <div class="row">
                             <div class="col-md-6">
                                 <div class="form-group">
-                                    <label for="kode_dokter">Kode Dokter <span class="text-danger">*</span></label>
-                                    <input type="text"
-                                           class="form-control @error('kode_dokter') is-invalid @enderror"
-                                           id="kode_dokter"
-                                           name="kode_dokter"
-                                           value="{{ old('kode_dokter') }}"
-                                           placeholder="Contoh: DR001"
-                                           maxlength="10"
-                                           required
-                                           style="text-transform: uppercase;">
-                                    @error('kode_dokter')
+                                    <label for="dokter_id">Dokter <span class="text-danger">*</span></label>
+                                    <select class="form-control select2 @error('dokter_id') is-invalid @enderror"
+                                            id="dokter_id"
+                                            name="dokter_id"
+                                            required>
+                                        <option value="">-- Pilih Dokter --</option>
+                                        @foreach($dokters as $dokter)
+                                            <option value="{{ $dokter->id }}"
+                                                    data-spesialisasi="{{ $dokter->spesialisasi }}"
+                                                    {{ old('dokter_id') == $dokter->id ? 'selected' : '' }}>
+                                                {{ $dokter->nama_dokter }} - {{ $dokter->spesialisasi }}
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                    @error('dokter_id')
                                         <div class="invalid-feedback">{{ $message }}</div>
                                     @enderror
-                                    <small class="form-text text-muted">
-                                        Maksimal 10 karakter, harus unik
-                                    </small>
                                 </div>
                             </div>
 
                             <div class="col-md-6">
                                 <div class="form-group">
-                                    <label for="nama_dokter">Nama Dokter <span class="text-danger">*</span></label>
-                                    <input type="text"
-                                           class="form-control @error('nama_dokter') is-invalid @enderror"
-                                           id="nama_dokter"
-                                           name="nama_dokter"
-                                           value="{{ old('nama_dokter') }}"
-                                           placeholder="Contoh: Dr. Ahmad Sutanto"
-                                           maxlength="255"
-                                           required>
-                                    @error('nama_dokter')
+                                    <label for="poli_id">Poli <span class="text-danger">*</span></label>
+                                    <select class="form-control select2 @error('poli_id') is-invalid @enderror"
+                                            id="poli_id"
+                                            name="poli_id"
+                                            required>
+                                        <option value="">-- Pilih Poli --</option>
+                                        @foreach($polis as $poli)
+                                            <option value="{{ $poli->id }}"
+                                                    {{ old('poli_id') == $poli->id ? 'selected' : '' }}>
+                                                {{ $poli->nama_poli }}
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                    @error('poli_id')
                                         <div class="invalid-feedback">{{ $message }}</div>
                                     @enderror
                                 </div>
@@ -97,16 +102,21 @@
                         <div class="row">
                             <div class="col-md-6">
                                 <div class="form-group">
-                                    <label for="spesialisasi">Spesialisasi <span class="text-danger">*</span></label>
-                                    <input type="text"
-                                           class="form-control @error('spesialisasi') is-invalid @enderror"
-                                           id="spesialisasi"
-                                           name="spesialisasi"
-                                           value="{{ old('spesialisasi') }}"
-                                           placeholder="Contoh: Dokter Umum"
-                                           maxlength="255"
-                                           required>
-                                    @error('spesialisasi')
+                                    <label for="hari">Hari <span class="text-danger">*</span></label>
+                                    <select class="form-control @error('hari') is-invalid @enderror"
+                                            id="hari"
+                                            name="hari"
+                                            required>
+                                        <option value="">-- Pilih Hari --</option>
+                                        <option value="Senin" {{ old('hari') == 'Senin' ? 'selected' : '' }}>Senin</option>
+                                        <option value="Selasa" {{ old('hari') == 'Selasa' ? 'selected' : '' }}>Selasa</option>
+                                        <option value="Rabu" {{ old('hari') == 'Rabu' ? 'selected' : '' }}>Rabu</option>
+                                        <option value="Kamis" {{ old('hari') == 'Kamis' ? 'selected' : '' }}>Kamis</option>
+                                        <option value="Jumat" {{ old('hari') == 'Jumat' ? 'selected' : '' }}>Jumat</option>
+                                        <option value="Sabtu" {{ old('hari') == 'Sabtu' ? 'selected' : '' }}>Sabtu</option>
+                                        <option value="Minggu" {{ old('hari') == 'Minggu' ? 'selected' : '' }}>Minggu</option>
+                                    </select>
+                                    @error('hari')
                                         <div class="invalid-feedback">{{ $message }}</div>
                                     @enderror
                                 </div>
@@ -114,33 +124,59 @@
 
                             <div class="col-md-6">
                                 <div class="form-group">
-                                    <label for="no_telepon">No. Telepon</label>
-                                    <input type="text"
-                                           class="form-control @error('no_telepon') is-invalid @enderror"
-                                           id="no_telepon"
-                                           name="no_telepon"
-                                           value="{{ old('no_telepon') }}"
-                                           placeholder="Contoh: 081234567890"
-                                           maxlength="15">
-                                    @error('no_telepon')
+                                    <label for="kuota_pasien">Kuota Pasien <span class="text-danger">*</span></label>
+                                    <input type="number"
+                                           class="form-control @error('kuota_pasien') is-invalid @enderror"
+                                           id="kuota_pasien"
+                                           name="kuota_pasien"
+                                           value="{{ old('kuota_pasien', 20) }}"
+                                           min="1"
+                                           max="100"
+                                           placeholder="Contoh: 20"
+                                           required>
+                                    @error('kuota_pasien')
                                         <div class="invalid-feedback">{{ $message }}</div>
                                     @enderror
+                                    <small class="form-text text-muted">
+                                        Maksimal pasien per hari (1-100)
+                                    </small>
                                 </div>
                             </div>
                         </div>
 
-                        <div class="form-group">
-                            <label for="email">Email</label>
-                            <input type="email"
-                                   class="form-control @error('email') is-invalid @enderror"
-                                   id="email"
-                                   name="email"
-                                   value="{{ old('email') }}"
-                                   placeholder="Contoh: dokter@email.com"
-                                   maxlength="255">
-                            @error('email')
-                                <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="jam_mulai">Jam Mulai <span class="text-danger">*</span></label>
+                                    <input type="time"
+                                           class="form-control @error('jam_mulai') is-invalid @enderror"
+                                           id="jam_mulai"
+                                           name="jam_mulai"
+                                           value="{{ old('jam_mulai', '08:00') }}"
+                                           required>
+                                    @error('jam_mulai')
+                                        <div class="invalid-feedback">{{ $message }}</div>
+                                    @enderror
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="jam_selesai">Jam Selesai <span class="text-danger">*</span></label>
+                                    <input type="time"
+                                           class="form-control @error('jam_selesai') is-invalid @enderror"
+                                           id="jam_selesai"
+                                           name="jam_selesai"
+                                           value="{{ old('jam_selesai', '12:00') }}"
+                                           required>
+                                    @error('jam_selesai')
+                                        <div class="invalid-feedback">{{ $message }}</div>
+                                    @enderror
+                                    <small class="form-text text-muted" id="duration-info">
+                                        Durasi: <span id="duration-text">4 jam</span>
+                                    </small>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="form-group">
@@ -156,16 +192,16 @@
                                 </label>
                             </div>
                             <small class="form-text text-muted">
-                                Dokter yang aktif akan tampil dalam pilihan jadwal
+                                Jadwal yang aktif akan tampil dalam pilihan pasien
                             </small>
                         </div>
                     </div>
 
                     <div class="card-footer">
                         <button type="submit" class="btn btn-primary" id="submitBtn">
-                            <i class="fas fa-save"></i> Simpan
+                            <i class="fas fa-save"></i> Simpan Jadwal
                         </button>
-                        <a href="{{ route('dokters.index') }}" class="btn btn-secondary">
+                        <a href="{{ route('jadwal-dokters.index') }}" class="btn btn-secondary">
                             <i class="fas fa-times"></i> Batal
                         </a>
                         <button type="reset" class="btn btn-outline-secondary">
@@ -189,30 +225,30 @@
                     <ul class="list-unstyled">
                         <li class="mb-2">
                             <i class="fas fa-check text-success"></i>
-                            <strong>Kode Dokter:</strong> Kode unik untuk identifikasi dokter (maks 10 karakter)
+                            <strong>Dokter:</strong> Pilih dokter yang aktif
                         </li>
                         <li class="mb-2">
                             <i class="fas fa-check text-success"></i>
-                            <strong>Nama Dokter:</strong> Nama lengkap dokter dengan gelar
+                            <strong>Poli:</strong> Pilih poli yang sesuai dengan spesialisasi dokter
                         </li>
                         <li class="mb-2">
                             <i class="fas fa-check text-success"></i>
-                            <strong>Spesialisasi:</strong> Bidang keahlian dokter
+                            <strong>Hari:</strong> Hari praktik dokter
                         </li>
                         <li class="mb-2">
                             <i class="fas fa-check text-success"></i>
-                            <strong>Kontak:</strong> No. telepon dan email (opsional)
+                            <strong>Jam:</strong> Pastikan jam selesai lebih besar dari jam mulai
                         </li>
                         <li class="mb-2">
                             <i class="fas fa-check text-success"></i>
-                            <strong>Status Aktif:</strong> Dokter aktif bisa dijadwalkan
+                            <strong>Kuota:</strong> Maksimal pasien yang bisa dilayani per hari
                         </li>
                     </ul>
 
                     <div class="alert alert-warning mt-3">
                         <i class="fas fa-exclamation-triangle"></i>
                         <strong>Catatan:</strong>
-                        Pastikan kode dokter belum digunakan sebelumnya.
+                        Pastikan tidak ada konflik jadwal dokter pada hari dan waktu yang sama.
                     </div>
                 </div>
             </div>
@@ -221,30 +257,30 @@
             <div class="card card-secondary">
                 <div class="card-header">
                     <h3 class="card-title">
-                        <i class="fas fa-eye"></i> Preview
+                        <i class="fas fa-eye"></i> Preview Jadwal
                     </h3>
                 </div>
                 <div class="card-body">
                     <div class="preview-content">
                         <div class="mb-2">
-                            <strong>Kode:</strong>
-                            <span id="preview-kode" class="text-primary">-</span>
+                            <strong>Dokter:</strong>
+                            <span id="preview-dokter" class="text-primary">Belum dipilih</span>
                         </div>
                         <div class="mb-2">
-                            <strong>Nama:</strong>
-                            <span id="preview-nama" class="text-dark">-</span>
+                            <strong>Poli:</strong>
+                            <span id="preview-poli" class="text-info">Belum dipilih</span>
                         </div>
                         <div class="mb-2">
-                            <strong>Spesialisasi:</strong>
-                            <span id="preview-spesialisasi" class="text-info">-</span>
+                            <strong>Hari:</strong>
+                            <span id="preview-hari" class="text-dark">Belum dipilih</span>
                         </div>
                         <div class="mb-2">
-                            <strong>Telepon:</strong>
-                            <span id="preview-telepon" class="text-muted">-</span>
+                            <strong>Waktu:</strong>
+                            <span id="preview-waktu" class="text-warning">08:00 - 12:00</span>
                         </div>
                         <div class="mb-2">
-                            <strong>Email:</strong>
-                            <span id="preview-email" class="text-muted">-</span>
+                            <strong>Kuota:</strong>
+                            <span id="preview-kuota" class="text-success">20 pasien</span>
                         </div>
                         <div class="mb-2">
                             <strong>Status:</strong>
@@ -254,34 +290,28 @@
                 </div>
             </div>
 
-            <!-- Quick Examples Card -->
+            <!-- Quick Time Presets -->
             <div class="card card-success">
                 <div class="card-header">
                     <h3 class="card-title">
-                        <i class="fas fa-lightbulb"></i> Contoh Spesialisasi
+                        <i class="fas fa-clock"></i> Preset Waktu
                     </h3>
                 </div>
                 <div class="card-body">
-                    <div class="example-item mb-2" data-spesialisasi="Dokter Umum">
-                        <strong>Dokter Umum</strong>
+                    <div class="preset-item mb-2" data-mulai="08:00" data-selesai="12:00">
+                        <strong>Pagi:</strong> 08:00 - 12:00 (4 jam)
                     </div>
-                    <div class="example-item mb-2" data-spesialisasi="Spesialis Anak">
-                        <strong>Spesialis Anak</strong>
+                    <div class="preset-item mb-2" data-mulai="13:00" data-selesai="17:00">
+                        <strong>Siang:</strong> 13:00 - 17:00 (4 jam)
                     </div>
-                    <div class="example-item mb-2" data-spesialisasi="Spesialis Mata">
-                        <strong>Spesialis Mata</strong>
+                    <div class="preset-item mb-2" data-mulai="18:00" data-selesai="21:00">
+                        <strong>Malam:</strong> 18:00 - 21:00 (3 jam)
                     </div>
-                    <div class="example-item mb-2" data-spesialisasi="Spesialis Gigi">
-                        <strong>Spesialis Gigi</strong>
+                    <div class="preset-item mb-2" data-mulai="08:00" data-selesai="17:00">
+                        <strong>Full Day:</strong> 08:00 - 17:00 (9 jam)
                     </div>
-                    <div class="example-item mb-2" data-spesialisasi="Spesialis Jantung">
-                        <strong>Spesialis Jantung</strong>
-                    </div>
-                    <div class="example-item mb-2" data-spesialisasi="Spesialis Paru">
-                        <strong>Spesialis Paru</strong>
-                    </div>
-                    <div class="example-item" data-spesialisasi="Spesialis Kulit">
-                        <strong>Spesialis Kulit</strong>
+                    <div class="preset-item" data-mulai="19:00" data-selesai="22:00">
+                        <strong>Malam Akhir:</strong> 19:00 - 22:00 (3 jam)
                     </div>
                 </div>
             </div>
@@ -292,31 +322,33 @@
 @section('js')
 <script>
 $(document).ready(function() {
-    // Real-time preview
-    $('#kode_dokter').on('input', function() {
-        const value = $(this).val().toUpperCase() || '-';
-        $('#preview-kode').text(value);
-        $(this).val(value); // Auto uppercase
+    // Initialize Select2
+    $('.select2').select2({
+        theme: 'bootstrap4',
+        width: '100%'
     });
 
-    $('#nama_dokter').on('input', function() {
-        const value = $(this).val() || '-';
-        $('#preview-nama').text(value);
+    // Real-time preview updates
+    $('#dokter_id').on('change', function() {
+        const selectedText = $(this).find('option:selected').text();
+        const value = selectedText !== '-- Pilih Dokter --' ? selectedText : 'Belum dipilih';
+        $('#preview-dokter').text(value);
     });
 
-    $('#spesialisasi').on('input', function() {
-        const value = $(this).val() || '-';
-        $('#preview-spesialisasi').text(value);
+    $('#poli_id').on('change', function() {
+        const selectedText = $(this).find('option:selected').text();
+        const value = selectedText !== '-- Pilih Poli --' ? selectedText : 'Belum dipilih';
+        $('#preview-poli').text(value);
     });
 
-    $('#no_telepon').on('input', function() {
-        const value = $(this).val() || '-';
-        $('#preview-telepon').text(value);
+    $('#hari').on('change', function() {
+        const value = $(this).val() || 'Belum dipilih';
+        $('#preview-hari').text(value);
     });
 
-    $('#email').on('input', function() {
-        const value = $(this).val() || '-';
-        $('#preview-email').text(value);
+    $('#kuota_pasien').on('input', function() {
+        const value = $(this).val() || '20';
+        $('#preview-kuota').text(value + ' pasien');
     });
 
     $('#is_active').on('change', function() {
@@ -330,30 +362,96 @@ $(document).ready(function() {
         }
     });
 
-    // Form validation
-    $('#dokterForm').on('submit', function(e) {
-        const kode = $('#kode_dokter').val().trim();
-        const nama = $('#nama_dokter').val().trim();
-        const spesialisasi = $('#spesialisasi').val().trim();
+    // Time duration calculation
+    function calculateDuration() {
+        const jamMulai = $('#jam_mulai').val();
+        const jamSelesai = $('#jam_selesai').val();
 
-        if (!kode || !nama || !spesialisasi) {
+        if (jamMulai && jamSelesai) {
+            const startTime = new Date(`2000-01-01T${jamMulai}:00`);
+            const endTime = new Date(`2000-01-01T${jamSelesai}:00`);
+
+            if (endTime > startTime) {
+                const diffMs = endTime - startTime;
+                const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+                const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+
+                let durationText = '';
+                if (diffHours > 0) {
+                    durationText += diffHours + ' jam';
+                }
+                if (diffMinutes > 0) {
+                    if (durationText) durationText += ' ';
+                    durationText += diffMinutes + ' menit';
+                }
+
+                $('#duration-text').text(durationText);
+                $('#preview-waktu').text(jamMulai + ' - ' + jamSelesai);
+
+                // Change color based on duration
+                if (diffHours >= 6) {
+                    $('#duration-text').removeClass().addClass('text-warning');
+                } else if (diffHours >= 4) {
+                    $('#duration-text').removeClass().addClass('text-success');
+                } else {
+                    $('#duration-text').removeClass().addClass('text-info');
+                }
+            } else {
+                $('#duration-text').text('Waktu tidak valid').removeClass().addClass('text-danger');
+            }
+        }
+    }
+
+    $('#jam_mulai, #jam_selesai').on('change', calculateDuration);
+
+    // Preset time click handlers
+    $('.preset-item').on('click', function() {
+        const jamMulai = $(this).data('mulai');
+        const jamSelesai = $(this).data('selesai');
+
+        $('#jam_mulai').val(jamMulai);
+        $('#jam_selesai').val(jamSelesai);
+
+        calculateDuration();
+    });
+
+    // Form validation
+    $('#jadwalForm').on('submit', function(e) {
+        const dokterId = $('#dokter_id').val();
+        const poliId = $('#poli_id').val();
+        const hari = $('#hari').val();
+        const jamMulai = $('#jam_mulai').val();
+        const jamSelesai = $('#jam_selesai').val();
+        const kuota = $('#kuota_pasien').val();
+
+        if (!dokterId || !poliId || !hari || !jamMulai || !jamSelesai || !kuota) {
             e.preventDefault();
             Swal.fire({
                 icon: 'error',
-                title: 'Oops...',
-                text: 'Kode dokter, nama dokter, dan spesialisasi harus diisi!'
+                title: 'Form Belum Lengkap',
+                text: 'Semua field wajib harus diisi!'
             });
             return false;
         }
 
-        // Email validation
-        const email = $('#email').val().trim();
-        if (email && !isValidEmail(email)) {
+        // Time validation
+        if (jamSelesai <= jamMulai) {
             e.preventDefault();
             Swal.fire({
                 icon: 'error',
-                title: 'Email tidak valid',
-                text: 'Format email tidak sesuai!'
+                title: 'Waktu Tidak Valid',
+                text: 'Jam selesai harus lebih besar dari jam mulai!'
+            });
+            return false;
+        }
+
+        // Kuota validation
+        if (kuota < 1 || kuota > 100) {
+            e.preventDefault();
+            Swal.fire({
+                icon: 'error',
+                title: 'Kuota Tidak Valid',
+                text: 'Kuota pasien harus antara 1-100!'
             });
             return false;
         }
@@ -362,59 +460,25 @@ $(document).ready(function() {
         const submitBtn = $('#submitBtn');
         submitBtn.html('<i class="fas fa-spinner fa-spin"></i> Menyimpan...').prop('disabled', true);
 
-        // Allow form to submit
         return true;
     });
 
     // Reset form
     $('button[type="reset"]').on('click', function() {
         setTimeout(function() {
-            $('#preview-kode').text('-');
-            $('#preview-nama').text('-');
-            $('#preview-spesialisasi').text('-');
-            $('#preview-telepon').text('-');
-            $('#preview-email').text('-');
+            $('#preview-dokter').text('Belum dipilih');
+            $('#preview-poli').text('Belum dipilih');
+            $('#preview-hari').text('Belum dipilih');
+            $('#preview-waktu').text('08:00 - 12:00');
+            $('#preview-kuota').text('20 pasien');
             $('#preview-status').removeClass('badge-danger').addClass('badge-success').text('Aktif');
+            $('#duration-text').text('4 jam').removeClass().addClass('text-success');
+            $('.select2').trigger('change');
         }, 100);
     });
 
-    // Example click handlers
-    $('.example-item').on('click', function() {
-        const spesialisasi = $(this).data('spesialisasi');
-        $('#spesialisasi').val(spesialisasi).trigger('input');
-    });
-
-    // Auto-suggest kode based on nama dokter
-    $('#nama_dokter').on('blur', function() {
-        const nama = $(this).val().toLowerCase();
-        const kode = $('#kode_dokter').val();
-
-        if (!kode && nama) {
-            let suggestedCode = '';
-
-            if (nama.includes('ahmad')) suggestedCode = 'DR001';
-            else if (nama.includes('budi')) suggestedCode = 'DR002';
-            else if (nama.includes('sari')) suggestedCode = 'DR003';
-            else if (nama.includes('indra')) suggestedCode = 'DR004';
-            else if (nama.includes('rina')) suggestedCode = 'DR005';
-
-            if (suggestedCode) {
-                $('#kode_dokter').val(suggestedCode).trigger('input');
-            }
-        }
-    });
-
-    // Phone number formatting
-    $('#no_telepon').on('input', function() {
-        let value = $(this).val().replace(/\D/g, ''); // Remove non-digits
-        $(this).val(value);
-    });
-
-    // Email validation function
-    function isValidEmail(email) {
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        return emailRegex.test(email);
-    }
+    // Initialize on page load
+    calculateDuration();
 });
 
 // Auto hide alerts
@@ -463,7 +527,7 @@ setTimeout(function() {
     border-color: #007bff;
 }
 
-.example-item {
+.preset-item {
     cursor: pointer;
     padding: 8px;
     border-radius: 4px;
@@ -471,9 +535,10 @@ setTimeout(function() {
     border: 1px solid transparent;
 }
 
-.example-item:hover {
+.preset-item:hover {
     background-color: #e9ecef;
     border-color: #ced4da;
+    transform: translateX(2px);
 }
 
 .invalid-feedback {
@@ -483,6 +548,20 @@ setTimeout(function() {
 .btn:disabled {
     opacity: 0.65;
     cursor: not-allowed;
+}
+
+.select2-container--bootstrap4 .select2-selection--single {
+    height: calc(2.25rem + 2px);
+}
+
+.select2-container--bootstrap4 .select2-selection--single .select2-selection__rendered {
+    line-height: calc(2.25rem + 2px);
+}
+
+/* Duration info styling */
+#duration-info {
+    margin-top: 5px;
+    font-weight: 500;
 }
 
 /* Loading animation */

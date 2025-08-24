@@ -304,4 +304,5 @@ class PasienController extends Controller
         'is_new_patient' => !$hasHistory
     ]);
 }
+
 }

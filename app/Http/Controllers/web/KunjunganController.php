@@ -529,6 +529,46 @@ public function searchPasien(Request $request)
     return response()->json($pasiens);
 }
 
+// Di DokterController.php
+public function getJadwal(Request $request, $dokterId)
+{
+    $hari = $request->get('hari');
+    $tanggal = $request->get('tanggal');
+
+    $query = JadwalDokter::where('dokter_id', $dokterId);
+
+    if ($hari) {
+        $query->where('hari', $hari);
+    }
+
+    if ($tanggal) {
+        // Optional: filter berdasarkan tanggal aktif jika ada
+        $query->whereDate('tanggal_berlaku_dari', '<=', $tanggal)
+              ->whereDate('tanggal_berlaku_sampai', '>=', $tanggal);
+    }
+
+    $jadwals = $query->with(['poli', 'dokter'])
+                    ->orderBy('jam_mulai')
+                    ->get()
+                    ->map(function($jadwal) {
+                        return [
+                            'id' => $jadwal->id,
+                            'hari' => $jadwal->hari,
+                            'jam_mulai' => $jadwal->jam_mulai,
+                            'jam_selesai' => $jadwal->jam_selesai,
+                            'poli' => [
+                                'id' => $jadwal->poli->id ?? '',
+                                'nama_poli' => $jadwal->poli->nama ?? $jadwal->poli->nama_poli ?? ''
+                            ]
+                        ];
+                    });
+
+    return response()->json([
+        'success' => true,
+        'data' => $jadwals
+    ]);
+}
+
     /**
      * Get antrian info for kunjungan
      */
@@ -593,7 +633,6 @@ public function searchPasien(Request $request)
      */
     public function generateNomorAntrian(Request $request)
 {
-    // dd($request->all());
     $poliId = $request->get('poli_id');
     $tanggal = $request->get('tanggal');
 
@@ -605,13 +644,13 @@ public function searchPasien(Request $request)
     }
 
     // Hitung nomor antrian berdasarkan jumlah kunjungan hari itu di poli tersebut
-    $lastAntrian = Kunjungan::where('poli_id', $poliId)
-                           ->whereDate('tanggal_kunjungan', $tanggal)
-                           ->count();
+    $lastAntrian = \App\Kunjungan::where('poli_id', $poliId)
+                                       ->whereDate('tanggal_kunjungan', $tanggal)
+                                       ->count();
 
     $nomorAntrian = str_pad($lastAntrian + 1, 3, '0', STR_PAD_LEFT);
 
-    $poli = Poli::find($poliId);
+    $poli = \App\Poli::find($poliId);
 
     return response()->json([
         'success' => true,
@@ -622,4 +661,13 @@ public function searchPasien(Request $request)
         ]
     ]);
 }
+
+private function generateNoAntrian($poliId, $tanggal)
+    {
+        $lastAntrian = Kunjungan::where('poli_id', $poliId)
+            ->whereDate('tanggal_kunjungan', $tanggal)
+            ->max('no_antrian');
+
+        return ($lastAntrian ?? 0) + 1;
+    }
 }

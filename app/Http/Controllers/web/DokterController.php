@@ -4,8 +4,10 @@ namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
 use App\Dokter;
+use App\JadwalDokter;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Validator;
 
 class DokterController extends Controller
 {
@@ -345,4 +347,169 @@ class DokterController extends Controller
             'pagination' => ['more' => false]
         ]);
     }
+public function getJadwal(Request $request, $dokterId)
+{
+    // dd($request->all(), $dokterId);
+    try {
+        // // Validasi parameter
+        // $validator = Validator::make([
+        //     'dokter_id' => $dokterId,
+        //     'hari' => $request->get('hari'),
+        //     'tanggal' => $request->get('tanggal')
+        // ], [
+        //     'dokter_id' => 'required|integer|exists:dokters,id',
+        //     'hari' => 'nullable|string|in:Senin,Selasa,Rabu,Kamis,Jumat,Sabtu,Minggu',
+        //     'tanggal' => 'nullable|date_format:Y-m-d'
+        // ], [
+        //     'dokter_id.required' => 'ID Dokter diperlukan.',
+        //     'dokter_id.integer' => 'ID Dokter harus berupa angka.',
+        //     'dokter_id.exists' => 'Dokter tidak ditemukan.',
+        //     'hari.in' => 'Hari tidak valid.',
+        //     'tanggal.date_format' => 'Format tanggal tidak valid (YYYY-MM-DD).'
+        // ]);
+
+        // if ($validator->fails()) {
+        //     return response()->json([
+        //         'success' => false,
+        //         'message' => 'Validasi gagal.',
+        //         'errors' => $validator->errors()
+        //     ], 400);
+        // }
+
+        $hari = $request->get('hari');
+        $tanggal = $request->get('tanggal');
+
+        // Cek apakah dokter aktif
+        $dokter = Dokter::find($dokterId);
+        if (!$dokter || !$dokter->is_active) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Dokter tidak aktif atau tidak ditemukan.',
+                'data' => []
+            ], 404);
+        }
+
+        // Build query
+        $query = JadwalDokter::where('dokter_id', $dokterId)
+                            ->where('is_active', true); // Hanya jadwal yang aktif
+
+        // Filter berdasarkan hari jika ada
+        if ($hari) {
+            $query->where('hari', $hari);
+        }
+
+        // Filter berdasarkan tanggal jika ada (untuk mengecek hari dari tanggal)
+        if ($tanggal && !$hari) {
+            try {
+                $hariDariTanggal = Carbon::createFromFormat('Y-m-d', $tanggal)->locale('id')->isoFormat('dddd');
+                // Mapping hari Indonesia
+                $hariMapping = [
+                    'Senin' => 'Senin',
+                    'Selasa' => 'Selasa',
+                    'Rabu' => 'Rabu',
+                    'Kamis' => 'Kamis',
+                    'Jumat' => 'Jumat',
+                    'Sabtu' => 'Sabtu',
+                    'Minggu' => 'Minggu'
+                ];
+
+                // Alternatif jika locale tidak bekerja
+                $dayOfWeek = Carbon::createFromFormat('Y-m-d', $tanggal)->dayOfWeek;
+                $dayNames = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+                $hariDariTanggal = $dayNames[$dayOfWeek];
+
+                $query->where('hari', $hariDariTanggal);
+            } catch (\Exception $e) {
+                Log::warning('Error parsing tanggal:', ['tanggal' => $tanggal, 'error' => $e->getMessage()]);
+            }
+        }
+
+        // Ambil data dengan relasi
+        $jadwals = $query->with(['poli', 'dokter'])
+                        ->orderBy('jam_mulai')
+                        ->get();
+
+        // Check jika tidak ada jadwal
+        if ($jadwals->isEmpty()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Tidak ada jadwal ditemukan.',
+                'data' => []
+            ]);
+        }
+
+        // Format data response
+        $formattedJadwals = $jadwals->map(function($jadwal) use ($tanggal) {
+            // Hitung kuota jika tanggal diberikan
+            $kuotaInfo = null;
+            if ($tanggal) {
+                $kuotaTerpakai = $jadwal->getKuotaTerpakai($tanggal);
+                $kuotaTersisa = $jadwal->getKuotaTersisa($tanggal);
+                $kuotaInfo = [
+                    'kuota_total' => $jadwal->kuota_pasien,
+                    'kuota_terpakai' => $kuotaTerpakai,
+                    'kuota_tersisa' => $kuotaTersisa,
+                    'is_available' => $kuotaTersisa > 0
+                ];
+            }
+
+            return [
+                'id' => $jadwal->id,
+                'hari' => $jadwal->hari,
+                'jam_mulai' => $jadwal->jam_mulai_formatted ?? Carbon::createFromFormat('H:i:s', $jadwal->jam_mulai)->format('H:i'),
+                'jam_selesai' => $jadwal->jam_selesai_formatted ?? Carbon::createFromFormat('H:i:s', $jadwal->jam_selesai)->format('H:i'),
+                'jam_mulai_full' => $jadwal->jam_mulai, // Format lengkap untuk keperluan lain
+                'jam_selesai_full' => $jadwal->jam_selesai,
+                'kuota_pasien' => $jadwal->kuota_pasien,
+                'kuota_info' => $kuotaInfo,
+                'is_active' => $jadwal->is_active,
+                'poli' => [
+                    'id' => $jadwal->poli->id ?? null,
+                    'nama_poli' => $jadwal->poli->nama_poli ?? 'Poli tidak tersedia',
+                    'kode_poli' => $jadwal->poli->kode_poli ?? null
+                ],
+                'dokter' => [
+                    'id' => $jadwal->dokter->id ?? null,
+                    'nama_dokter' => $jadwal->dokter->nama_dokter ?? 'Dokter tidak tersedia',
+                    'spesialisasi' => $jadwal->dokter->spesialisasi ?? null
+                ]
+            ];
+        });
+
+        // Log untuk debugging (opsional)
+        Log::info('Get Jadwal Request:', [
+            'dokter_id' => $dokterId,
+            'hari' => $hari,
+            'tanggal' => $tanggal,
+            'jadwal_count' => $jadwals->count()
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Jadwal berhasil ditemukan.',
+            'data' => $formattedJadwals,
+            'meta' => [
+                'total' => $jadwals->count(),
+                'dokter_id' => $dokterId,
+                'hari' => $hari,
+                'tanggal' => $tanggal
+            ]
+        ]);
+
+    } catch (\Exception $e) {
+        Log::error('Get Jadwal Error:', [
+            'dokter_id' => $dokterId,
+            'request' => $request->all(),
+            'message' => $e->getMessage(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine()
+        ]);
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Terjadi kesalahan sistem.',
+            'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+        ], 500);
+    }
+}
 }

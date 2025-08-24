@@ -416,7 +416,6 @@ $(document).ready(function() {
     });
 
 // Bagian yang perlu diperbaiki/ditambahkan di section @js
-
 function loadDoctorSchedules() {
     var dokterId = $('#dokter_id').val();
     var tanggal = $('#tanggal_kunjungan').val();

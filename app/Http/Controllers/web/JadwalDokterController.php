@@ -80,71 +80,211 @@ class JadwalDokterController extends Controller
      * Store a newly created resource in storage.
      */
     public function store(Request $request)
-    {
-        Log::info('Store Jadwal Dokter Request:', [
-            'request_data' => $request->all(),
-            'method' => $request->method(),
+{
+    Log::info('Store Jadwal Dokter Request:', [
+        'request_data' => $request->all(),
+        'method' => $request->method(),
+    ]);
+
+    try {
+        // Validasi
+        $validatedData = $request->validate([
+            'dokter_id' => 'required|exists:dokters,id',
+            'poli_id' => 'required|exists:polis,id',
+            'hari' => 'required|in:Senin,Selasa,Rabu,Kamis,Jumat,Sabtu,Minggu', // Perbaikan: Kapitalisasi
+            'jam_mulai' => 'required|date_format:H:i',
+            'jam_selesai' => 'required|date_format:H:i|after:jam_mulai',
+            'kuota_pasien' => 'required|integer|min:1|max:100', // Perbaikan: Max 100 sesuai view
+            'is_active' => 'nullable|boolean',
+        ], [
+            // Custom error messages
+            'dokter_id.required' => 'Dokter harus dipilih.',
+            'dokter_id.exists' => 'Dokter yang dipilih tidak valid.',
+            'poli_id.required' => 'Poli harus dipilih.',
+            'poli_id.exists' => 'Poli yang dipilih tidak valid.',
+            'hari.required' => 'Hari harus dipilih.',
+            'hari.in' => 'Hari yang dipilih tidak valid.',
+            'jam_mulai.required' => 'Jam mulai harus diisi.',
+            'jam_mulai.date_format' => 'Format jam mulai tidak valid (HH:MM).',
+            'jam_selesai.required' => 'Jam selesai harus diisi.',
+            'jam_selesai.date_format' => 'Format jam selesai tidak valid (HH:MM).',
+            'jam_selesai.after' => 'Jam selesai harus lebih besar dari jam mulai.',
+            'kuota_pasien.required' => 'Kuota pasien harus diisi.',
+            'kuota_pasien.integer' => 'Kuota pasien harus berupa angka.',
+            'kuota_pasien.min' => 'Kuota pasien minimal 1.',
+            'kuota_pasien.max' => 'Kuota pasien maksimal 100.',
         ]);
 
-        try {
-            // Validasi
-            $validatedData = $request->validate([
-                'dokter_id' => 'required|exists:dokters,id',
-                'poli_id' => 'required|exists:polis,id',
-                'hari' => 'required|in:senin,selasa,rabu,kamis,jumat,sabtu,minggu',
-                'jam_mulai' => 'required|date_format:H:i',
-                'jam_selesai' => 'required|date_format:H:i|after:jam_mulai',
-                'kuota_pasien' => 'required|integer|min:1|max:50',
-                'is_active' => 'nullable|boolean',
-            ]);
+        // Handle checkbox is_active
+        $validatedData['is_active'] = $request->has('is_active') ? true : false; // Perbaikan: boolean sebenarnya
 
-            // Handle checkbox is_active
-            $validatedData['is_active'] = $request->has('is_active') ? 1 : 0;
+        // Validasi dokter aktif
+        $dokter = \App\Dokter::find($validatedData['dokter_id']);
+        if (!$dokter || !$dokter->is_active) {
+            return back()
+                ->with('error', 'Dokter yang dipilih tidak aktif atau tidak ditemukan.')
+                ->withInput();
+        }
 
-            // Check for time conflicts
-            $conflict = JadwalDokter::where('dokter_id', $validatedData['dokter_id'])
+        // Validasi poli aktif
+        $poli = \App\Poli::find($validatedData['poli_id']);
+        if (!$poli || !$poli->is_active) {
+            return back()
+                ->with('error', 'Poli yang dipilih tidak aktif atau tidak ditemukan.')
+                ->withInput();
+        }
+
+        // Validasi durasi minimal (contoh: minimal 1 jam)
+        $jamMulai = \Carbon\Carbon::createFromFormat('H:i', $validatedData['jam_mulai']);
+        $jamSelesai = \Carbon\Carbon::createFromFormat('H:i', $validatedData['jam_selesai']);
+        $durasiMenit = $jamMulai->diffInMinutes($jamSelesai);
+
+        if ($durasiMenit < 60) {
+            return back()
+                ->with('error', 'Durasi jadwal minimal 1 jam.')
+                ->withInput();
+        }
+
+        // Perbaikan: Validasi maksimal durasi (contoh: maksimal 12 jam)
+        if ($durasiMenit > 720) { // 12 jam = 720 menit
+            return back()
+                ->with('error', 'Durasi jadwal maksimal 12 jam.')
+                ->withInput();
+        }
+
+        // Check for duplicate exact schedule (same doctor, day, time)
+        $duplicateExact = JadwalDokter::where('dokter_id', $validatedData['dokter_id'])
+            ->where('hari', $validatedData['hari'])
+            ->where('jam_mulai', $validatedData['jam_mulai'])
+            ->where('jam_selesai', $validatedData['jam_selesai'])
+            ->exists();
+
+        if ($duplicateExact) {
+            return back()
+                ->with('error', 'Jadwal yang sama persis sudah ada untuk dokter ini.')
+                ->withInput();
+        }
+
+        // Perbaikan: Check for time conflicts - lebih akurat
+        $conflict = JadwalDokter::where('dokter_id', $validatedData['dokter_id'])
+            ->where('hari', $validatedData['hari'])
+            ->where('is_active', true)
+            ->where(function ($query) use ($validatedData) {
+                // Case 1: New schedule starts during existing schedule
+                $query->where(function ($q) use ($validatedData) {
+                    $q->where('jam_mulai', '<=', $validatedData['jam_mulai'])
+                      ->where('jam_selesai', '>', $validatedData['jam_mulai']);
+                })
+                // Case 2: New schedule ends during existing schedule
+                ->orWhere(function ($q) use ($validatedData) {
+                    $q->where('jam_mulai', '<', $validatedData['jam_selesai'])
+                      ->where('jam_selesai', '>=', $validatedData['jam_selesai']);
+                })
+                // Case 3: New schedule completely contains existing schedule
+                ->orWhere(function ($q) use ($validatedData) {
+                    $q->where('jam_mulai', '>=', $validatedData['jam_mulai'])
+                      ->where('jam_selesai', '<=', $validatedData['jam_selesai']);
+                })
+                // Case 4: Existing schedule completely contains new schedule
+                ->orWhere(function ($q) use ($validatedData) {
+                    $q->where('jam_mulai', '<=', $validatedData['jam_mulai'])
+                      ->where('jam_selesai', '>=', $validatedData['jam_selesai']);
+                });
+            })
+            ->exists();
+
+        if ($conflict) {
+            // Ambil jadwal yang konflik untuk info lebih detail
+            $conflictSchedule = JadwalDokter::with(['dokter', 'poli'])
+                ->where('dokter_id', $validatedData['dokter_id'])
                 ->where('hari', $validatedData['hari'])
                 ->where('is_active', true)
                 ->where(function ($query) use ($validatedData) {
-                    $query->whereBetween('jam_mulai', [$validatedData['jam_mulai'], $validatedData['jam_selesai']])
-                        ->orWhereBetween('jam_selesai', [$validatedData['jam_mulai'], $validatedData['jam_selesai']])
-                        ->orWhere(function ($q) use ($validatedData) {
-                            $q->where('jam_mulai', '<=', $validatedData['jam_mulai'])
-                              ->where('jam_selesai', '>=', $validatedData['jam_selesai']);
-                        });
+                    $query->where(function ($q) use ($validatedData) {
+                        $q->where('jam_mulai', '<=', $validatedData['jam_mulai'])
+                          ->where('jam_selesai', '>', $validatedData['jam_mulai']);
+                    })
+                    ->orWhere(function ($q) use ($validatedData) {
+                        $q->where('jam_mulai', '<', $validatedData['jam_selesai'])
+                          ->where('jam_selesai', '>=', $validatedData['jam_selesai']);
+                    })
+                    ->orWhere(function ($q) use ($validatedData) {
+                        $q->where('jam_mulai', '>=', $validatedData['jam_mulai'])
+                          ->where('jam_selesai', '<=', $validatedData['jam_selesai']);
+                    })
+                    ->orWhere(function ($q) use ($validatedData) {
+                        $q->where('jam_mulai', '<=', $validatedData['jam_mulai'])
+                          ->where('jam_selesai', '>=', $validatedData['jam_selesai']);
+                    });
                 })
-                ->exists();
+                ->first();
 
-            if ($conflict) {
-                return back()
-                    ->with('error', 'Konflik jadwal! Dokter sudah memiliki jadwal pada waktu tersebut.')
-                    ->withInput();
+            $errorMessage = 'Konflik jadwal! Dokter sudah memiliki jadwal pada waktu tersebut.';
+            if ($conflictSchedule) {
+                $errorMessage .= sprintf(
+                    ' Jadwal konflik: %s - %s di %s.',
+                    \Carbon\Carbon::createFromFormat('H:i:s', $conflictSchedule->jam_mulai)->format('H:i'),
+                    \Carbon\Carbon::createFromFormat('H:i:s', $conflictSchedule->jam_selesai)->format('H:i'),
+                    $conflictSchedule->poli->nama_poli ?? 'Poli tidak diketahui'
+                );
             }
 
-            // Create jadwal dokter
-            $jadwal = JadwalDokter::create($validatedData);
-
-            Log::info('Jadwal Dokter Created:', ['jadwal' => $jadwal->toArray()]);
-
-            return redirect()->route('jadwal-dokters.index')
-                ->with('success', 'Jadwal dokter berhasil ditambahkan!');
-
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            Log::error('Validation Error:', $e->errors());
             return back()
-                ->withErrors($e->errors())
-                ->withInput();
-        } catch (\Exception $e) {
-            Log::error('Store Jadwal Dokter Error:', [
-                'message' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
-            return back()
-                ->with('error', 'Terjadi kesalahan: ' . $e->getMessage())
+                ->with('error', $errorMessage)
                 ->withInput();
         }
+
+        // Convert time format untuk database (tambahkan detik)
+        $validatedData['jam_mulai'] = $validatedData['jam_mulai'] . ':00';
+        $validatedData['jam_selesai'] = $validatedData['jam_selesai'] . ':00';
+
+        // Create jadwal dokter
+        $jadwal = JadwalDokter::create($validatedData);
+
+        Log::info('Jadwal Dokter Created:', [
+            'jadwal' => $jadwal->toArray(),
+            'dokter' => $jadwal->dokter->nama_dokter ?? 'Unknown',
+            'poli' => $jadwal->poli->nama_poli ?? 'Unknown'
+        ]);
+
+        // Success message dengan detail
+        $successMessage = sprintf(
+            'Jadwal dokter berhasil ditambahkan! %s - %s (%s) pada hari %s jam %s-%s.',
+            $jadwal->dokter->nama_dokter ?? 'Dokter',
+            $jadwal->poli->nama_poli ?? 'Poli',
+            $jadwal->dokter->spesialisasi ?? 'Spesialisasi',
+            $jadwal->hari,
+            \Carbon\Carbon::createFromFormat('H:i:s', $jadwal->jam_mulai)->format('H:i'),
+            \Carbon\Carbon::createFromFormat('H:i:s', $jadwal->jam_selesai)->format('H:i')
+        );
+
+        return redirect()->route('jadwal-dokters.index')
+            ->with('success', $successMessage);
+
+    } catch (\Illuminate\Validation\ValidationException $e) {
+        Log::error('Validation Error:', [
+            'errors' => $e->errors(),
+            'request_data' => $request->all()
+        ]);
+
+        return back()
+            ->withErrors($e->errors())
+            ->withInput();
+
+    } catch (\Exception $e) {
+        Log::error('Store Jadwal Dokter Error:', [
+            'message' => $e->getMessage(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+            'trace' => $e->getTraceAsString(),
+            'request_data' => $request->all()
+        ]);
+
+        return back()
+            ->with('error', 'Terjadi kesalahan sistem. Silakan coba lagi atau hubungi administrator.')
+            ->withInput();
     }
+}
 
     /**
      * Display the specified resource.
