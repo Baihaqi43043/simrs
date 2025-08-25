@@ -53,6 +53,13 @@ class WebAuthController extends Controller
                 return back()->withErrors(['email' => 'Akun Anda tidak aktif, hubungi administrator'])
                             ->withInput($request->only('email'));
             }
+        // TAMBAHKAN DEBUG INI SETELAH LOGIN BERHASIL
+            Log::info('User login debug', [
+                'user_id' => $user->id,
+                'user_role' => $user->role,
+                'user_email' => $user->email,
+                'is_active' => $user->is_active
+            ]);
 
             // Save to session
             session([
@@ -61,11 +68,18 @@ class WebAuthController extends Controller
                     'id' => $user->id,
                     'name' => $user->name,
                     'email' => $user->email,
-                    'role' => $user->role,
-                    'role_text' => $user->role_text, // Gunakan accessor dari model
+                    'role' => $user->role, // PASTIKAN INI ADA
+                    'role_text' => $user->role_text,
                     'is_active' => $user->is_active,
                 ],
             ]);
+
+            // DEBUG: Cek session setelah disimpan
+            Log::info('Session after login', [
+                'session_user' => session('user'),
+                'session_token' => session('token') ? 'EXISTS' : 'NOT_EXISTS'
+            ]);
+
 
             Log::info('Direct login successful for user: ' . $user->email);
 

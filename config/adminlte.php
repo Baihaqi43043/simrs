@@ -266,9 +266,15 @@ return [
         ],
         [
             'text' => 'Kunjungan Hari Ini',
-            'url' => '#',
+            'url' => 'kunjungans/today',
             'icon' => 'fas fa-fw fa-calendar-day text-warning',
         ],
+        [
+        'text' => 'Logout',
+        'url' => 'logout',
+        'icon' => 'fas fa-fw fa-sign-out-alt text-danger',
+        'target' => '_self', // Penting untuk logout
+    ],
 
         // AKUN PENGGUNA
 

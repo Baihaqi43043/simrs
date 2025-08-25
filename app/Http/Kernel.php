@@ -66,5 +66,6 @@ class Kernel extends HttpKernel
     'role' => \App\Http\Middleware\RoleMiddleware::class,
     'api.auth' => \App\Http\Middleware\ApiAuthenticate::class,
     'token.auth' => \App\Http\Middleware\TokenAuth::class, // TAMBAH INI
+    'web.role' => \App\Http\Middleware\WebRoleMiddleware::class,
 ];
 }

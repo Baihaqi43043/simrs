@@ -1,6 +1,6 @@
-@section('css')
-    <link rel="stylesheet" href="{{ asset('css/health-theme.css') }}">
-@endsection
+<!-- MASALAH 1: Role-based Button Display -->
+<!-- Di blade template, hide button "Daftar Kunjungan" untuk role dokter -->
+
 @extends('adminlte::page')
 
 @section('title', 'Data Kunjungan')
@@ -14,7 +14,7 @@
                 </div>
                 <div class="col-sm-6">
                     <ol class="breadcrumb float-sm-right">
-                        <li class="breadcrumb-item"><a href="{{ url('/') }}">Home</a></li>
+                        <li class="breadcrumb-item"><a href="{{ url('/dashboard') }}">Home</a></li>
                         <li class="breadcrumb-item active">Data Kunjungan</li>
                     </ol>
                 </div>
@@ -40,12 +40,12 @@
         </div>
     @endif
 
-    <!-- Statistics Cards -->
+    <!-- Statistics Cards - FIX: Menggunakan data dari controller -->
     <div class="row mb-4">
         <div class="col-lg-3 col-6">
             <div class="small-box bg-info">
                 <div class="inner">
-                    <h3>{{ $kunjungans->total() }}</h3>
+                    <h3>{{ $totalKunjungan ?? 0 }}</h3>
                     <p>Total Kunjungan</p>
                 </div>
                 <div class="icon">
@@ -56,7 +56,7 @@
         <div class="col-lg-3 col-6">
             <div class="small-box bg-warning">
                 <div class="inner">
-                    <h3>{{ $kunjungans->where('status', 'menunggu')->count() }}</h3>
+                    <h3>{{ $menunggu ?? 0 }}</h3>
                     <p>Menunggu</p>
                 </div>
                 <div class="icon">
@@ -67,7 +67,7 @@
         <div class="col-lg-3 col-6">
             <div class="small-box bg-primary">
                 <div class="inner">
-                    <h3>{{ $kunjungans->where('status', 'sedang_dilayani')->count() }}</h3>
+                    <h3>{{ $sedangDilayani ?? 0 }}</h3>
                     <p>Sedang Dilayani</p>
                 </div>
                 <div class="icon">
@@ -78,7 +78,7 @@
         <div class="col-lg-3 col-6">
             <div class="small-box bg-success">
                 <div class="inner">
-                    <h3>{{ $kunjungans->where('status', 'selesai')->count() }}</h3>
+                    <h3>{{ $selesai ?? 0 }}</h3>
                     <p>Selesai</p>
                 </div>
                 <div class="icon">
@@ -94,22 +94,32 @@
                 <div class="card-header">
                     <h3 class="card-title">Daftar Kunjungan</h3>
                     <div class="card-tools">
+                        <!-- ALWAYS show Today button -->
                         <a href="{{ route('kunjungans.today') }}" class="btn btn-info btn-sm mr-2">
                             <i class="fas fa-calendar-day"></i> Kunjungan Hari Ini
                         </a>
-                        <a href="{{ route('kunjungans.create') }}" class="btn btn-primary btn-sm">
-                            <i class="fas fa-plus"></i> Daftar Kunjungan
-                        </a>
+
+                        <!-- ROLE-BASED: Only show create button for admin|pendaftaran -->
+                        @php
+                            $userRole = session('user.role');
+                        @endphp
+
+                        @if($userRole === 'admin' || $userRole === 'pendaftaran')
+                            <a href="{{ route('kunjungans.create') }}" class="btn btn-primary btn-sm">
+                                <i class="fas fa-plus"></i> Daftar Kunjungan
+                            </a>
+                        @endif
                     </div>
                 </div>
 
-                <!-- Filter Form -->
+                <!-- FIX: Complete Filter Form -->
                 <div class="card-body">
                     <form method="GET" action="{{ route('kunjungans.index') }}" class="mb-4">
                         <div class="row">
-                            <div class="col-md-2">
+                            <div class="col-md-3">
                                 <div class="form-group">
-                                    <input type="text" name="search" class="form-control" placeholder="Cari pasien, No. Kunjungan..."
+                                    <input type="text" name="search" class="form-control"
+                                           placeholder="Cari pasien, No. Kunjungan..."
                                            value="{{ request('search') }}">
                                 </div>
                             </div>
@@ -119,19 +129,31 @@
                                 </button>
                             </div>
                         </div>
+
                         <div class="row">
                             <div class="col-md-2">
                                 <div class="form-group">
                                     <input type="date" name="start_date" class="form-control"
-                                           value="{{ request('start_date') }}" placeholder="Tanggal Mulai">
+                                           value="{{ request('start_date') }}">
                                     <small class="text-muted">Tanggal Mulai</small>
                                 </div>
                             </div>
                             <div class="col-md-2">
                                 <div class="form-group">
                                     <input type="date" name="end_date" class="form-control"
-                                           value="{{ request('end_date') }}" placeholder="Tanggal Akhir">
+                                           value="{{ request('end_date') }}">
                                     <small class="text-muted">Tanggal Akhir</small>
+                                </div>
+                            </div>
+                            <div class="col-md-2">
+                                <div class="form-group">
+                                    <select name="status" class="form-control">
+                                        <option value="">Semua Status</option>
+                                        <option value="menunggu" {{ request('status') == 'menunggu' ? 'selected' : '' }}>Menunggu</option>
+                                        <option value="sedang_dilayani" {{ request('status') == 'sedang_dilayani' ? 'selected' : '' }}>Sedang Dilayani</option>
+                                        <option value="selesai" {{ request('status') == 'selesai' ? 'selected' : '' }}>Selesai</option>
+                                        <option value="batal" {{ request('status') == 'batal' ? 'selected' : '' }}>Batal</option>
+                                    </select>
                                 </div>
                             </div>
                             <div class="col-md-2">
@@ -143,7 +165,38 @@
                                     </select>
                                 </div>
                             </div>
-                            <div class="col-md-6">
+                            <div class="col-md-2">
+                                <div class="form-group">
+                                    <select name="poli_id" class="form-control">
+                                        <option value="">Semua Poli</option>
+                                        @if(isset($polis))
+                                            @foreach($polis as $poli)
+                                                <option value="{{ $poli->id }}" {{ request('poli_id') == $poli->id ? 'selected' : '' }}>
+                                                    {{ $poli->nama_poli }}
+                                                </option>
+                                            @endforeach
+                                        @endif
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-2">
+                                <div class="form-group">
+                                    <select name="dokter_id" class="form-control">
+                                        <option value="">Semua Dokter</option>
+                                        @if(isset($dokters))
+                                            @foreach($dokters as $dokter)
+                                                <option value="{{ $dokter->id }}" {{ request('dokter_id') == $dokter->id ? 'selected' : '' }}>
+                                                    Dr. {{ $dokter->nama_dokter }}
+                                                </option>
+                                            @endforeach
+                                        @endif
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-12">
                                 <a href="{{ route('kunjungans.index') }}" class="btn btn-secondary">
                                     <i class="fas fa-eraser"></i> Reset Filter
                                 </a>
@@ -156,9 +209,11 @@
                         <table class="table table-bordered table-hover">
                             <thead>
                                 <tr>
+                                    @if($userRole === 'admin' || $userRole === 'pendaftaran')
                                     <th width="5%">
                                         <input type="checkbox" id="selectAll">
                                     </th>
+                                    @endif
                                     <th>No. Kunjungan</th>
                                     <th>Tanggal & Jam</th>
                                     <th>No. Antrian</th>
@@ -174,9 +229,11 @@
                             <tbody>
                                 @forelse($kunjungans as $kunjungan)
                                 <tr>
+                                    @if($userRole === 'admin' || $userRole === 'pendaftaran')
                                     <td>
                                         <input type="checkbox" class="select-item" value="{{ $kunjungan->id }}">
                                     </td>
+                                    @endif
                                     <td>
                                         <span class="badge badge-info">{{ $kunjungan->no_kunjungan }}</span>
                                     </td>
@@ -226,15 +283,30 @@
                                             <a href="{{ route('kunjungans.show', $kunjungan->id) }}" class="btn btn-info btn-sm" title="Detail">
                                                 <i class="fas fa-eye"></i>
                                             </a>
-                                            @if($kunjungan->status != 'selesai' && $kunjungan->status != 'batal')
+
+                                            <!-- ROLE-BASED: Edit button hanya untuk admin|pendaftaran -->
+                                            @if(($userRole === 'admin' || $userRole === 'pendaftaran') && $kunjungan->status != 'selesai' && $kunjungan->status != 'batal')
                                             <a href="{{ route('kunjungans.edit', $kunjungan->id) }}" class="btn btn-warning btn-sm" title="Edit">
                                                 <i class="fas fa-edit"></i>
                                             </a>
                                             @endif
-                                            <a href="{{ route('kunjungans.antrian', $kunjungan->id) }}" class="btn btn-success btn-sm" title="Info Antrian">
+
+                                            <!-- ROLE-BASED: Medical actions untuk dokter -->
+                                            @if($userRole === 'dokter' || $userRole === 'admin')
+                                            <a href="{{ route('kunjungans.tindakan.index', $kunjungan->id) }}" class="btn btn-success btn-sm" title="Tindakan">
+                                                <i class="fas fa-stethoscope"></i>
+                                            </a>
+                                            <a href="{{ route('kunjungans.diagnosa.index', $kunjungan->id) }}" class="btn btn-primary btn-sm" title="Diagnosa">
+                                                <i class="fas fa-diagnoses"></i>
+                                            </a>
+                                            @endif
+
+                                            <!-- FIX: Remove parameter from antrian route -->
+                                            <a href="{{ route('kunjungans.antrian') }}" class="btn btn-secondary btn-sm" title="Info Antrian">
                                                 <i class="fas fa-list-ol"></i>
                                             </a>
-                                            @if($kunjungan->status == 'menunggu')
+
+                                            @if(($userRole === 'admin' || $userRole === 'pendaftaran') && $kunjungan->status == 'menunggu')
                                             <button type="button" class="btn btn-danger btn-sm" onclick="confirmDelete({{ $kunjungan->id }})" title="Batal">
                                                 <i class="fas fa-times"></i>
                                             </button>
@@ -248,7 +320,7 @@
                                         <div class="my-3">
                                             <i class="fas fa-clipboard-list fa-3x text-muted mb-3"></i>
                                             <h5 class="text-muted">Tidak ada data kunjungan</h5>
-                                            <p class="text-muted">Silakan daftarkan kunjungan baru atau ubah filter pencarian</p>
+                                            <p class="text-muted">Silakan ubah filter pencarian</p>
                                         </div>
                                     </td>
                                 </tr>
@@ -257,7 +329,8 @@
                         </table>
                     </div>
 
-                    <!-- Bulk Actions -->
+                    <!-- ROLE-BASED: Bulk Actions hanya untuk admin|pendaftaran -->
+                    @if($userRole === 'admin' || $userRole === 'pendaftaran')
                     <div id="bulkActions" class="mt-3" style="display: none;">
                         <div class="card">
                             <div class="card-body">
@@ -297,6 +370,7 @@
                             </div>
                         </div>
                     </div>
+                    @endif
 
                     <!-- Pagination -->
                     <div class="d-flex justify-content-between align-items-center mt-3">
@@ -315,7 +389,8 @@
     </div>
 </div>
 
-<!-- Delete Confirmation Modal -->
+<!-- Delete Modal - Hanya untuk admin|pendaftaran -->
+@if($userRole === 'admin' || $userRole === 'pendaftaran')
 <div class="modal fade" id="deleteModal" tabindex="-1" role="dialog" aria-labelledby="deleteModalLabel" aria-hidden="true">
     <div class="modal-dialog" role="document">
         <div class="modal-content">
@@ -340,17 +415,19 @@
         </div>
     </div>
 </div>
+@endif
 @stop
 
 @section('js')
 <script>
+@if(session('user.role') === 'admin' || session('user.role') === 'pendaftaran')
 // Delete confirmation
 function confirmDelete(id) {
     $('#deleteForm').attr('action', '{{ url("kunjungans") }}/' + id);
     $('#deleteModal').modal('show');
 }
 
-// Bulk actions
+// Bulk actions - hanya untuk admin|pendaftaran
 $(document).ready(function() {
     // Select all checkbox
     $('#selectAll').change(function() {
@@ -400,50 +477,11 @@ $(document).ready(function() {
     // Make clearSelection global
     window.clearSelection = clearSelection;
 });
+@endif
 
 // Auto submit on filter change
 $('select[name="status"], select[name="poli_id"], select[name="dokter_id"], select[name="jenis_kunjungan"]').on('change', function() {
     $(this).closest('form').submit();
 });
 </script>
-                                <div class="form-group">
-                                    <input type="date" name="tanggal_kunjungan" class="form-control"
-                                           value="{{ request('tanggal_kunjungan') }}" placeholder="Tanggal">
-                                </div>
-                            </div>
-                            <div class="col-md-2">
-                                <div class="form-group">
-                                    <select name="status" class="form-control">
-                                        <option value="">Semua Status</option>
-                                        <option value="menunggu" {{ request('status') == 'menunggu' ? 'selected' : '' }}>Menunggu</option>
-                                        <option value="sedang_dilayani" {{ request('status') == 'sedang_dilayani' ? 'selected' : '' }}>Sedang Dilayani</option>
-                                        <option value="selesai" {{ request('status') == 'selesai' ? 'selected' : '' }}>Selesai</option>
-                                        <option value="batal" {{ request('status') == 'batal' ? 'selected' : '' }}>Batal</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="col-md-2">
-                                <div class="form-group">
-                                    <select name="poli_id" class="form-control">
-                                        <option value="">Semua Poli</option>
-                                        @foreach($polis as $poli)
-                                            <option value="{{ $poli->id }}" {{ request('poli_id') == $poli->id ? 'selected' : '' }}>
-                                                {{ $poli->nama_poli }}
-                                            </option>
-                                        @endforeach
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="col-md-2">
-                                <div class="form-group">
-                                    <select name="dokter_id" class="form-control">
-                                        <option value="">Semua Dokter</option>
-                                        @foreach($dokters as $dokter)
-                                            <option value="{{ $dokter->id }}" {{ request('dokter_id') == $dokter->id ? 'selected' : '' }}>
-                                                Dr. {{ $dokter->nama_dokter }}
-                                            </option>
-                                        @endforeach
-                                    </select>
-                                </div>
-                            </div>
-                            <div class="col-m
+@stop
